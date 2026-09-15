@@ -18,6 +18,7 @@
 
   const ovHome = document.getElementById('overlayHome');
   const ovPause = document.getElementById('overlayPause');
+  const ovVictory = document.getElementById('overlayVictory');
   const ovHelp = document.getElementById('overlayHelp');
   const ovSettings = document.getElementById('overlaySettings');
   const ovCustomize = document.getElementById('overlayCustomize');
@@ -103,6 +104,8 @@
   document.getElementById('closeSettings')?.addEventListener('click', () => { saveSettings(); showOverlay(ovSettings,false); });
   document.getElementById('homeHelp')?.addEventListener('click', () => showOverlay(ovHelp,true));
   document.getElementById('homeSettings')?.addEventListener('click', () => showOverlay(ovSettings,true));
+  document.getElementById('victoryRestartBtn')?.addEventListener('click', () => restart());
+  document.getElementById('victoryHomeBtn')?.addEventListener('click', () => goHome());
   if (btnHomeCustomize) {
     btnHomeCustomize.onclick = () => { buildSkins(); showOverlay(ovCustomize, true); };
   }
@@ -357,65 +360,76 @@
     const s = enemyStatus.get(e.id ?? e);
     if (!s || (s.burnT <= 0)) return;
     const stacks = Math.min(s.burnStacks ?? 1, 3);
-    const r = (e.r ?? 14) + 14 + stacks*4;
-    const pulse = 0.6 + 0.4*Math.sin(t*6 + e.x*0.02);
+    const r = (e.r ?? 14) + 12 + stacks*3;
+    const pulse = 0.65 + 0.35*Math.sin(t*6 + e.x*0.02);
 
-    // 🔥 Core molten aura
-    drawGlowOrb(ctx, x, y, r, '#ff7a2a', pulse);
+    // 🔥 Molten core glow under the flames
+    drawGlowOrb(ctx, x, y, r*0.85, '#ff5a1a', pulse);
 
-    // 🔥 Vertical flame volume (3D illusion)
-    drawVerticalEnergyPillar(ctx, x, y, r, '#ff6a00');
+    // 🔥 Real licking flame tongues (organic bezier shapes, not spike lines)
+    drawFlameLicks(ctx, x, y, r, 5 + stacks, t);
 
-    // 🔥 Flame spikes (replaces simple dots)
-    drawEnergySpikes(ctx, x, y, r*1.1, 6+stacks, '#ffae66', t);
+    // 🔥 Rising embers peeling off the burn
+    drawEmberBurst(ctx, x, y, r*1.3, 4 + stacks*3, t, stacks>=3 ? '#ffe2a0' : '#ffb060');
 
-    // 💥 Detonate ring → now erupting corona
+    // 💥 Detonate — enemy glowing white-hot right before it erupts
     if (hasG('fire','detonate') && stacks === 3){
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      ctx.strokeStyle = 'rgba(255,130,60,0.9)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(x,y,r*2.8 + Math.sin(t*8)*8,0,Math.PI*2);
-      ctx.stroke();
-      ctx.restore();
+      const flash = 0.5 + 0.5*Math.sin(t*10);
+      drawShockRing(ctx, x, y, r*1.6 + Math.sin(t*8)*6, 0.5*flash, '#ffcf8a');
+      drawGlowOrb(ctx, x, y, r*0.6, '#fff2c0', flash);
     }
 
-    // 🌋 Volcanic Core — MASSIVE pulse
+    // 🌋 Volcanic Core — massive eruption pulse
     if (hasG('fire','volcanicCore') && player._volcFlash > 0){
-      drawGlowOrb(ctx, x, y, r*3.5, '#ff3a00', 1);
+      drawShockRing(ctx, x, y, r*2.6, 0.8, '#ff8a2a');
+      drawEmberBurst(ctx, x, y, r*3, 18, t, '#ffcf8a');
     }
+  }
+
+  // One-off fire explosion burst (Detonate pop / Volcanic Core burst / Napalm ignite)
+  function drawFireExplosion(ctx, x, y, r, life01, t){
+    const fade = 1 - life01;
+    drawShockRing(ctx, x, y, r*life01, 0.85*fade, '#ffb060');
+    drawGlowOrb(ctx, x, y, r*0.55*(1-life01*0.5), '#ff5a1a', fade);
+    drawFlameLicks(ctx, x, y, r*0.7*(1-life01*0.4), 8, t, '#ff3a00', '#ff8a2a', '#fff2c0');
+    drawEmberBurst(ctx, x, y, r*1.4, 16, t, '#ffcf8a');
   }
   function drawLightningVFX(ctx, e, x, y, t){
     const s = enemyStatus.get(e.id ?? e);
     if (!s || (s.staticT <= 0)) return;
 
-    const r = (e.r ?? 14) + 18;
+    const r = (e.r ?? 14) + 16;
     const flick = 0.7 + 0.3*Math.sin(t*10);
 
-    // ⚡ Charged dome
-    drawGlowOrb(ctx, x, y, r, '#9fe3ff', flick);
+    // ⚡ Charged static dome — small, crackling, not a blob
+    drawGlowOrb(ctx, x, y, r*0.55, '#9fe3ff', flick*0.7);
 
-    // ⚡ Lightning spokes
+    // ⚡ Crackling arcs skittering across the surface (short jagged jolts)
     ctx.save();
-    ctx.strokeStyle = '#e8f7ff';
-    ctx.lineWidth = 2;
     ctx.globalCompositeOperation = 'screen';
-    for(let i=0;i<4;i++){
-      ctx.beginPath();
-      ctx.moveTo(x,y);
-      ctx.lineTo(
-        x + (Math.random()*2-1)*r,
-        y + (Math.random()*2-1)*r
-      );
-      ctx.stroke();
+    for (let i=0;i<3;i++){
+      const a0 = t*3 + i*2.1;
+      const a1 = a0 + 0.9 + Math.sin(t*6+i);
+      const x0 = x + Math.cos(a0)*r*0.7, y0 = y + Math.sin(a0)*r*0.7;
+      const x1 = x + Math.cos(a1)*r*0.85, y1 = y + Math.sin(a1)*r*0.85;
+      drawLightningBolt(ctx, x0, y0, x1, y1, '#bfefff', 0.75, 1.6, false);
     }
     ctx.restore();
 
-    // 🌩 Thunderclap — shockwave cylinder
-    if (hasG('lightning','thunderclap')){
-      drawVerticalEnergyPillar(ctx, x, y, r*1.2, '#cfffff');
+    if (s.staticPrimed){
+      // priming pulse: about to discharge — a bright ring cinching in
+      drawShockRing(ctx, x, y, r*(1.3 - 0.3*flick), 0.35*flick, '#e8f7ff');
     }
+
+    // 🌩 Thunderclap — crackling shock ring instead of a static pillar
+    if (hasG('lightning','thunderclap')){
+      drawShockRing(ctx, x, y, r*1.15 + Math.sin(t*9)*4, 0.35, '#cfffff');
+    }
+  }
+
+  // One-off discharge bolt: player → target (+ optional chain hops)
+  function drawLightningDischarge(ctx, x1, y1, x2, y2, alpha=1){
+    drawLightningBolt(ctx, x1, y1, x2, y2, '#9fe3ff', alpha, 3.2, true);
   }
   // ================================
   // PLAIN BULLET (NO GLYPHS)
@@ -437,78 +451,163 @@
     const s = enemyStatus.get(e.id ?? e);
     if (!s || (s.hauntT <= 0)) return;
 
-    const r = (e.r ?? 14) + 20;
-    const pulse = 0.6 + 0.4*Math.sin(t*3);
+    const r = (e.r ?? 14) + 18;
+    const pulse = 0.5 + 0.3*Math.sin(t*3);
 
-    // 👻 Ethereal body haze
-    drawGlowOrb(ctx, x, y, r, '#c066ff', pulse);
+    // 👻 Faint ethereal body haze (kept subtle so the sprite reads through)
+    drawGlowOrb(ctx, x, y, r*0.6, '#a24dff', pulse*0.6);
 
-    // 👻 Orbiting wisps (now volumetric)
+    // 👻 Trailing spectral motes drifting off the haunted enemy
+    drawSpectralTrail(ctx, x, y, r, t, '#c98bff');
+
+    // 👻 Orbiting wisp companions (volumetric, more when swarmed)
     const count = hasG('spirit','wispSwarm') ? 3 : 1;
     for(let i=0;i<count;i++){
       const a = t*1.5 + i*2.4;
-      const wx = x + Math.cos(a)*r*0.8;
-      const wy = y + Math.sin(a)*r*0.8;
-      drawGlowOrb(ctx, wx, wy, 10, '#e7c7ff', 1);
+      const wx = x + Math.cos(a)*r*0.85;
+      const wy = y + Math.sin(a)*r*0.85;
+      drawGlowOrb(ctx, wx, wy, 8, '#e7c7ff', 1);
     }
+  }
 
-    // 🔗 Soul Bind tether (NEW — fixes invisibility)
-    if (hasG('spirit','soulBind') && player._linkA && player._linkB){
-      ctx.save();
-      ctx.strokeStyle = 'rgba(200,120,255,0.6)';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([8,6]);
-      ctx.beginPath();
-      ctx.moveTo(player._linkA.x - cam.x, player._linkA.y - cam.y);
-      ctx.lineTo(player._linkB.x - cam.x, player._linkB.y - cam.y);
-      ctx.stroke();
-      ctx.restore();
-    }
+  // Soul Bind tether — animated pulsing ectoplasm beam with a traveling pulse
+  function drawSoulBindTether(ctx, x1, y1, x2, y2, t){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const wob = Math.sin(t*4)*4;
+    const mx = (x1+x2)/2 + wob, my = (y1+y2)/2 - wob;
+
+    // soft outer glow beam
+    ctx.strokeStyle = 'rgba(190,110,255,0.35)';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1); ctx.quadraticCurveTo(mx,my,x2,y2);
+    ctx.stroke();
+
+    // core beam, dashed and slowly animated
+    ctx.strokeStyle = 'rgba(220,170,255,0.85)';
+    ctx.lineWidth = 2.4;
+    ctx.setLineDash([10,7]);
+    ctx.lineDashOffset = -t*40;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1); ctx.quadraticCurveTo(mx,my,x2,y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // a traveling pulse of light along the tether
+    const p = (t*0.8) % 1;
+    const px = (1-p)*(1-p)*x1 + 2*(1-p)*p*mx + p*p*x2;
+    const py = (1-p)*(1-p)*y1 + 2*(1-p)*p*my + p*p*y2;
+    const g = ctx.createRadialGradient(px,py,0,px,py,9);
+    g.addColorStop(0,'rgba(255,255,255,0.95)');
+    g.addColorStop(1,'rgba(200,120,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(px,py,9,0,Math.PI*2); ctx.fill();
+
+    ctx.restore();
   }
   function drawWaterVFX(ctx, e, x, y, t){
     const s = enemyStatus.get(e.id ?? e);
     if (!s || (s.drenchT <= 0)) return;
 
-    const r = (e.r ?? 14) + 18;
+    const r = (e.r ?? 14) + 16;
 
-    // 💧 Liquid body bloom
-    drawGlowOrb(ctx, x, y, r, '#4fd3ff', 0.7);
+    // 💧 Faint liquid sheen under the ripples
+    drawGlowOrb(ctx, x, y, r*0.65, '#4fd3ff', 0.45);
 
-    // 💧 Flow rings (animated vertical depth)
+    // 💧 Real concentric ripples spreading outward from the soaked target
+    drawRippleRings(ctx, x, y, r*1.1, t, '#7fd8ff', 3);
+
+    // 💧 Occasional dripping droplet falling off the target
     ctx.save();
-    ctx.strokeStyle = 'rgba(180,240,255,0.6)';
-    ctx.lineWidth = 2;
+    ctx.globalCompositeOperation = 'screen';
+    const dropPhase = (t*1.2) % 1;
+    const dy = dropPhase*r*1.3;
+    ctx.globalAlpha = 0.7*(1-dropPhase);
+    ctx.fillStyle = '#bfeeff';
     ctx.beginPath();
-    ctx.arc(x,y,r + Math.sin(t*2)*6,0,Math.PI*2);
-    ctx.stroke();
+    ctx.ellipse(x, y + r*0.4 + dy, 2, 4, 0, 0, Math.PI*2);
+    ctx.fill();
     ctx.restore();
 
-    // ❄️ Freeze cross becomes ice pillar shards
+    // ❄️ Freeze — real angular ice crystal shards instead of a plain cross
     if ((e.freezeT ?? 0) > 0){
-      drawEnergySpikes(ctx, x, y, r*1.1, 4, '#cfefff', t);
+      drawFrostShards(ctx, x, y, r*1.05, 6, t, '#d7f6ff');
+      drawGlowOrb(ctx, x, y, r*0.5, '#eaffff', 0.35);
     }
   }
-  function drawEarthVFX(ctx, e, x, y, t){
-    if (!hasG('earth','stoneSkin')) return;
 
-    const r = (e.r ?? 14) + 10;
-
-    // 🪨 Crystalline shell
+  // Water impact splash (ripple shot knockback / permafrost shatter)
+  function drawWaterSplash(ctx, x, y, r, life01, t){
+    const fade = 1-life01;
+    drawRippleRings(ctx, x, y, r*(0.6+life01*0.8), t, '#a6ecff', 2);
     ctx.save();
-    ctx.strokeStyle = 'rgba(125,255,163,0.7)';
-    ctx.lineWidth = 4;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.6*fade;
+    const g = ctx.createRadialGradient(x,y,0,x,y,r*0.5);
+    g.addColorStop(0,'rgba(220,250,255,0.8)');
+    g.addColorStop(1,'rgba(120,210,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x,y,r*0.5,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawEarthVFX(ctx, e, x, y, t){
+    const s = enemyStatus.get(e.id ?? e);
+    const r = (e.r ?? 14) + 10;
+    let drew = false;
+
+    // 🪨 Jagged Earth — bleed drip particles while the target is bleeding
+    // (bleed can live on the enemy directly or in the status map depending on source)
+    if ((e.bleedT ?? 0) > 0 || (s?.bleedT ?? 0) > 0){
+      drawDripParticles(ctx, x, y, r, 5, t, '#c0392b');
+      drew = true;
+    }
+
+    // 🪨 Thornmail — a faint rocky armor shimmer around the player's own body
+    // (rendered on the player, not the enemy — see drawEarthPlayerVFX below)
+
+    return drew;
+  }
+
+  // Thornmail armor shimmer, drawn around the local player when the node is active
+  function drawEarthPlayerVFX(ctx, x, y, r, t){
+    if (!isPath('earth') || !hasG('earth','thornmail')) return;
+    const pulse = 0.4 + 0.15*Math.sin(t*2.2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = `rgba(150,255,180,${pulse})`;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.arc(x, y, r + 8, 0, Math.PI*2);
     ctx.stroke();
     ctx.restore();
-
-    // 🪨 Growing facets (armor feel)
-    drawEnergySpikes(ctx, x, y, r*1.2, 5, '#d9ffe6', t*0.5);
-
-    // 🌎 Quake pulse
-    if (hasG('earth','quake') && player._quakeFlash > 0){
-      drawGlowOrb(ctx, x, y, r*3, '#7dffa3', 1);
+    // small studs around the ring for a "spiked mail" read
+    for (let i=0;i<6;i++){
+      const a = (i/6)*Math.PI*2 + t*0.4;
+      const sx = x + Math.cos(a)*(r+8);
+      const sy = y + Math.sin(a)*(r+8);
+      ctx.save();
+      ctx.fillStyle = `rgba(170,255,190,${0.6})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
     }
+  }
+
+  // Rock-shard burst — Thornmail reflect hit / Spiked Barrier proc / Quake stomp
+  function drawEarthBurst(ctx, x, y, r, life01, t){
+    const fade = 1-life01;
+    drawRockShards(ctx, x, y, r*(0.7+life01*0.6), 7, t, '#9c8a6e', '#d9ffe6');
+    ctx.save();
+    ctx.globalAlpha = 0.35*fade;
+    ctx.fillStyle = '#6b5a44';
+    ctx.beginPath();
+    ctx.ellipse(x, y, r*0.5, r*0.22, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
   }
   function getVisualPlayerPos(){
     // Always start from immediate local state (instant)
@@ -587,6 +686,9 @@
     ents.ebullets.length = 0;
     ents.effects.length = 0;
     ents.pickups.length = 0;
+    ents.wisps.length = 0;
+    ents.balls.length = 0;
+    ents.golem = null;
 
     // Reset player locally (no more movement/shooting)
     player.hp = 0;
@@ -707,7 +809,240 @@
       hazards:{kind:'void', count:16},
       desc:'Void tiles. Enemies phase-dash at times.' },
   ];
-  // ✅ PvE leaderboard scoring per enemy type
+
+  // Themed background art -------------------------------------------------------
+  // Small deterministic PRNG so each level's texture is stable across redraws.
+  function makeThemePRNG(seed){
+    let s = seed >>> 0;
+    return function(){
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const _bgTileCache = new Map();
+  const BG_TILE_SIZE = 256;
+
+  // Draws el at (x,y) and mirrors it near tile edges so the pattern tiles seamlessly.
+  function wrapDrawOn(tctx, SIZE, x, y, drawFn){
+    const m = 44;
+    const pts = [[x, y]];
+    const left = x < m, right = x > SIZE - m, top = y < m, bottom = y > SIZE - m;
+    if (left) pts.push([x + SIZE, y]);
+    if (right) pts.push([x - SIZE, y]);
+    if (top) pts.push([x, y + SIZE]);
+    if (bottom) pts.push([x, y - SIZE]);
+    if (left && top) pts.push([x + SIZE, y + SIZE]);
+    if (right && bottom) pts.push([x - SIZE, y - SIZE]);
+    if (left && bottom) pts.push([x + SIZE, y - SIZE]);
+    if (right && top) pts.push([x - SIZE, y + SIZE]);
+    for (const [px, py] of pts) drawFn(px, py);
+  }
+
+  function drawMeadowTile(tctx, SIZE, rnd){
+    for (let i=0;i<9;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=20+rnd()*32;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        g.addColorStop(0,'rgba(80,150,80,0.12)'); g.addColorStop(1,'rgba(80,150,80,0)');
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<90;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, h=4+rnd()*7, lean=(rnd()-0.5)*4;
+      const shade=rnd(); const col = shade<0.33?'#2f5c34':shade<0.66?'#3c7a44':'#5aab5f';
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle=col; tctx.lineWidth=1.1; tctx.lineCap='round';
+        tctx.beginPath(); tctx.moveTo(px,py); tctx.quadraticCurveTo(px+lean,py-h/1.4, px+lean*1.6, py-h); tctx.stroke();
+        tctx.beginPath(); tctx.moveTo(px+2,py); tctx.quadraticCurveTo(px+2+lean,py-h/1.6, px+2+lean*1.4, py-h*0.8); tctx.stroke();
+      });
+    }
+    for (let i=0;i<12;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE; const col = rnd()<0.5?'#fff7c2':'#ffd6ec';
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=col;
+        for(let p=0;p<4;p++){ const ang=p*(Math.PI/2); tctx.beginPath(); tctx.arc(px+Math.cos(ang)*2.4, py+Math.sin(ang)*2.4, 1.6, 0, Math.PI*2); tctx.fill(); }
+        tctx.fillStyle='#e8b23a'; tctx.beginPath(); tctx.arc(px,py,1.3,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawDesertTile(tctx, SIZE, rnd){
+    tctx.strokeStyle='rgba(130,95,45,0.20)';
+    for (let i=0;i<12;i++){
+      const y0=rnd()*SIZE, amp=3+rnd()*5, ph=rnd()*Math.PI*2;
+      tctx.lineWidth=1+rnd()*1.4; tctx.beginPath();
+      for (let x=-10;x<=SIZE+10;x+=8){ const yy=y0+Math.sin(x*0.05+ph)*amp; if(x===-10) tctx.moveTo(x,yy); else tctx.lineTo(x,yy); }
+      tctx.stroke();
+    }
+    for (let i=0;i<26;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=1.5+rnd()*3;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle='rgba(95,68,36,0.5)'; tctx.beginPath(); tctx.ellipse(px,py,r,r*0.7,rnd()*Math.PI,0,Math.PI*2); tctx.fill();
+        tctx.fillStyle='rgba(190,150,85,0.35)'; tctx.beginPath(); tctx.ellipse(px-r*0.3,py-r*0.3,r*0.4,r*0.3,0,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<6;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(60,40,20,0.22)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py; for(let s=0;s<4;s++){ cx+=(rnd()-0.5)*18; cy+=(rnd()-0.5)*18; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+  }
+
+  function drawIceTile(tctx, SIZE, rnd){
+    for (let i=0;i<8;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=22+rnd()*32;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        g.addColorStop(0,'rgba(170,225,255,0.12)'); g.addColorStop(1,'rgba(170,225,255,0)');
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<11;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(205,240,255,0.28)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.2; cx+=Math.cos(ang)*8; cy+=Math.sin(ang)*8; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+    for (let i=0;i<55;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=0.6+rnd()*1.4;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=`rgba(255,255,255,${(0.2+rnd()*0.4).toFixed(2)})`;
+        tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawLavaTile(tctx, SIZE, rnd){
+    for (let i=0;i<15;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=14+rnd()*20;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle = rnd()<0.5?'rgba(45,17,17,0.35)':'rgba(65,27,22,0.3)';
+        const sides=5+Math.floor(rnd()*3); tctx.beginPath();
+        for (let s=0;s<sides;s++){ const ang=s/sides*Math.PI*2, rr=r*(0.7+rnd()*0.3); const px2=px+Math.cos(ang)*rr, py2=py+Math.sin(ang)*rr; if(s===0) tctx.moveTo(px2,py2); else tctx.lineTo(px2,py2); }
+        tctx.closePath(); tctx.fill();
+      });
+    }
+    for (let i=0;i<9;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(255,120,40,0.5)'; tctx.lineWidth=1.4;
+        tctx.shadowColor='rgba(255,140,50,0.8)'; tctx.shadowBlur=4;
+        tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.0; cx+=Math.cos(ang)*9; cy+=Math.sin(ang)*9; tctx.lineTo(cx,cy); }
+        tctx.stroke(); tctx.shadowBlur=0;
+      });
+    }
+    for (let i=0;i<22;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle='rgba(255,160,60,0.4)'; tctx.beginPath(); tctx.arc(px,py,1+rnd()*1.5,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawVoidTile(tctx, SIZE, rnd){
+    for (let i=0;i<7;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=28+rnd()*36;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        const c = rnd()<0.5? '160,80,220' : '90,60,220';
+        g.addColorStop(0, `rgba(${c},0.14)`); g.addColorStop(1, `rgba(${c},0)`);
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<65;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=0.5+rnd()*1.3;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=`rgba(255,255,255,${(0.3+rnd()*0.5).toFixed(2)})`;
+        tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<6;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(208,102,255,0.25)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.4; cx+=Math.cos(ang)*10; cy+=Math.sin(ang)*10; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+  }
+
+  function getThemeTile(theme){
+    if (_bgTileCache.has(theme.id)) return _bgTileCache.get(theme.id);
+    const SIZE = BG_TILE_SIZE;
+    const tcv = document.createElement('canvas');
+    tcv.width = SIZE; tcv.height = SIZE;
+    const tctx = tcv.getContext('2d');
+    const rnd = makeThemePRNG(theme.id * 7919 + 13);
+    switch (theme.hazards.kind){
+      case 'sand': drawDesertTile(tctx, SIZE, rnd); break;
+      case 'ice': drawIceTile(tctx, SIZE, rnd); break;
+      case 'lava': drawLavaTile(tctx, SIZE, rnd); break;
+      case 'void': drawVoidTile(tctx, SIZE, rnd); break;
+      default: drawMeadowTile(tctx, SIZE, rnd); break;
+    }
+    _bgTileCache.set(theme.id, tcv);
+    return tcv;
+  }
+
+  // Drifting atmospheric particles matched to the level's theme (fireflies, dust, snow, embers, void motes).
+  function drawAmbientParticles(theme, W, H){
+    const t = performance.now() / 1000;
+    let profile, count;
+    switch (theme.id){
+      case 1: profile='firefly'; count=16; break;
+      case 2: profile='dust'; count=20; break;
+      case 3: profile='snow'; count=26; break;
+      case 4: profile='ember'; count=20; break;
+      case 5: profile='voidmote'; count=18; break;
+      default: profile='dust'; count=14; break;
+    }
+    ctx.save();
+    for (let i=0;i<count;i++){
+      const seed = i*97.13 + theme.id*13.7;
+      const rx = Math.sin(seed)*0.5+0.5, ry = Math.cos(seed*1.7)*0.5+0.5;
+      let x, y, r, alpha, color;
+      switch (profile){
+        case 'firefly': {
+          x = rx*W + Math.sin(t*0.6+seed)*18; y = ry*H + Math.cos(t*0.5+seed*1.3)*14;
+          alpha = Math.max(0, 0.35+0.35*Math.sin(t*2+seed)); r=1.6;
+          color = `rgba(210,255,160,${alpha.toFixed(2)})`; break;
+        }
+        case 'dust': {
+          x = ((rx*W + t*10 + seed*5) % (W+40)) - 20; y = ry*H + Math.sin(t*0.3+seed)*10;
+          alpha = Math.max(0, 0.14+0.10*Math.sin(t+seed)); r=1+(i%3);
+          color = `rgba(230,200,140,${alpha.toFixed(2)})`; break;
+        }
+        case 'snow': {
+          x = rx*W + Math.sin(t*0.8+seed)*10; y = ((ry*H + t*18 + seed*7) % (H+40)) - 20;
+          alpha = Math.max(0, 0.35+0.25*Math.sin(t*3+seed)); r=1.2+(i%2);
+          color = `rgba(255,255,255,${alpha.toFixed(2)})`; break;
+        }
+        case 'ember': {
+          x = rx*W + Math.sin(t*0.9+seed)*14; y = (((ry*H - t*22 - seed*6) % (H+40)) + (H+40)) % (H+40) - 20;
+          alpha = Math.max(0, 0.4+0.3*Math.sin(t*4+seed)); r=1.4;
+          color = `rgba(255,150,60,${alpha.toFixed(2)})`; break;
+        }
+        case 'voidmote': default: {
+          x = rx*W + Math.sin(t*0.35+seed)*22; y = ry*H + Math.cos(t*0.28+seed*1.6)*22;
+          alpha = Math.max(0, 0.3+0.35*Math.sin(t*1.4+seed)); r=1.6+(i%2);
+          color = `rgba(208,102,255,${alpha.toFixed(2)})`; break;
+        }
+      }
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
 
   let currentTheme = LEVELS[0];
   // ✅ PvE leaderboard scoring per enemy type
@@ -805,6 +1140,37 @@
   const angleTo=(ax,ay,bx,by)=>Math.atan2(by-ay, bx-ax);
   const nowMS=()=>performance.now();
 
+  // Chest rarity tiers ---------------------------------------------------------
+  // Mirrors the common/rare/epic/legendary language already used for weapons.
+  const CHEST_RARITIES = {
+    common:    { id:'common',    label:'Common',    order:0, wood:'#6b4a1a', panel:'#9c6a2a', trim:'#e5c26a', glow:'#e5c26a', scale:1.00 },
+    rare:      { id:'rare',      label:'Rare',      order:1, wood:'#1e3a52', panel:'#2f5f86', trim:'#7fd4ff', glow:'#7fd4ff', scale:1.06 },
+    epic:      { id:'epic',      label:'Epic',      order:2, wood:'#3a1e52', panel:'#6a2f96', trim:'#d38aff', glow:'#d38aff', scale:1.12 },
+    legendary: { id:'legendary', label:'Legendary', order:3, wood:'#523a1e', panel:'#a97a2a', trim:'#ffd166', glow:'#ffe38a', scale:1.2  },
+  };
+  // Rarity odds [common,rare,epic,legendary] per level id (1..5) — deeper
+  // levels skew toward better chests instead of every chest looking the same.
+  const CHEST_RARITY_WEIGHTS = {
+    1: [72, 24, 4,  0],
+    2: [56, 30, 11, 3],
+    3: [40, 32, 20, 8],
+    4: [26, 32, 28, 14],
+    5: [16, 28, 34, 22],
+  };
+  function rollChestRarity(levelId, waveBonus=0){
+    const w = (CHEST_RARITY_WEIGHTS[clamp(levelId||1,1,5)] || CHEST_RARITY_WEIGHTS[1]).slice();
+    // Small extra tilt toward better loot on later waves within a run.
+    if (waveBonus > 0){
+      const shift = Math.min(waveBonus * 1.5, w[0] * 0.6);
+      w[0] -= shift; w[2] += shift * 0.5; w[3] += shift * 0.5;
+    }
+    const total = w[0]+w[1]+w[2]+w[3];
+    let r = rand(0, total);
+    const keys = ['common','rare','epic','legendary'];
+    for (let i=0;i<4;i++){ if (r < w[i]) return keys[i]; r -= w[i]; }
+    return 'common';
+  }
+
   // COLORS & DESIGNS ---------------------------------------------------------
   const COLORS = [
     {name:'Blue Core',  c:'#98d7ff'},
@@ -880,7 +1246,26 @@
 
 
   // WORLD --------------------------------------------------------------------
-  const world = { w:4000, h:2800, solids:[], buildings:[], walls:[], hazards:[], chests:[],
+  // Base arena size. Practice PvP doubles both dimensions (see restart()) to
+  // give 15+ bots room to spread out and to give the shrinking death-circle
+  // somewhere to shrink from.
+  const BASE_WORLD_W = 4000, BASE_WORLD_H = 2800;
+
+  // ===== Death-circle (battle-royale style shrinking zone) phases =====
+  // Each phase: sit still for `wait`s, then shrink smoothly over `shrink`s
+  // toward a smaller, semi-randomly re-centred circle. `dps` is the damage
+  // per second dealt to anyone caught outside the circle once this phase's
+  // shrink begins.
+  const ZONE_PHASES = [
+    { wait: 28, shrink: 18, scale: 0.62, dps: 3  },
+    { wait: 20, shrink: 16, scale: 0.55, dps: 5  },
+    { wait: 16, shrink: 14, scale: 0.50, dps: 7  },
+    { wait: 12, shrink: 12, scale: 0.42, dps: 10 },
+    { wait: 10, shrink: 10, scale: 0.35, dps: 14 },
+    { wait: 8,  shrink: 9,  scale: 0.30, dps: 18 }
+  ];
+
+  const world = { w:BASE_WORLD_W, h:BASE_WORLD_H, solids:[], buildings:[], walls:[], hazards:[], chests:[],
     rr(x,y,w,h){ return {x,y,w,h}; },
     rectOverlap(a,b,pad=0){ return !(a.x+a.w+pad < b.x || b.x+b.w+pad < a.x || a.y+a.h+pad < b.y || b.y+b.h+pad < a.y); },
     buildObstacles(){
@@ -895,7 +1280,14 @@
       const PATH_GAP = 44;          // minimum free gap between ANY rectangles
       const EDGE_GAP = 40;          // minimum distance from world edges
       const MAX_TRIES = 120;        // attempts per rectangle
-      const COUNT = 14 + Math.floor((currentTheme.id - 1) * 2);
+      const lvl = currentTheme.id;
+      // Deeper levels get a noticeably denser, busier map instead of the
+      // same handful of buildings scattered around every time.
+      // Practice PvP doubles both world dimensions (4x the area) — scale the
+      // building/clutter count by that same area ratio so the bigger arena
+      // doesn't end up feeling emptier than the old one.
+      const areaRatio = (this.w * this.h) / (BASE_WORLD_W * BASE_WORLD_H);
+      const COUNT = Math.round((18 + Math.floor((lvl - 1) * 4)) * areaRatio);
 
       // Arena walls (same as before)
       const arenaLeft   = 0;
@@ -963,6 +1355,20 @@
         // If not placed after MAX_TRIES, we skip this slot to keep generation robust
       }
 
+      // --- Clutter pass: small crates/rocks scattered between the buildings so
+      // the arena reads as a lived-in map instead of a handful of sparse boxes.
+      // Density scales with level so later arenas feel meaningfully busier.
+      const CLUTTER_GAP = 30;
+      const CLUTTER_COUNT = Math.round((8 + Math.floor((lvl - 1) * 4)) * areaRatio);
+      for (let i = 0; i < CLUTTER_COUNT; i++){
+        for (let t = 0; t < 40; t++){
+          const r = randomRect(36, 64, 32, 56);
+          if (!avoidOverlap(r, CLUTTER_GAP)) continue;
+          this.solids.push(this.rr(r.x, r.y, r.w, r.h));
+          break;
+        }
+      }
+
       // Rebuild wall segments around everything we placed
       this.rebuildWalls();
     },
@@ -1026,19 +1432,43 @@
         if(dist2(x+w/2,y+h/2,this.w/2,this.h/2)<600*600) bad=true;
         for(const s of this.walls){ if(this.rectOverlap(rect,s,30)){ bad=true; break; } }
         if(bad) continue;
+        // 🌋 Lava pits cycle through dormant → warn → erupt → after → dormant.
+        // Stagger each pit's start so the whole level doesn't erupt in sync.
+        if (kind === 'lava'){
+          rect.phase = 'dormant';
+          rect.phaseT = rand(0.5, 4.5);
+        }
         hz.push(rect);
       }
       this.hazards = hz;
     },
+    // Advances each lava hazard's dormant → warn → erupt → after → dormant cycle.
+    updateHazards(dt){
+      for (const hz of this.hazards){
+        if (hz.type !== 'lava') continue;
+        if (hz.phaseT == null){ hz.phase = 'dormant'; hz.phaseT = rand(0.5,4.5); }
+        hz.phaseT -= dt;
+        if (hz.phaseT <= 0){
+          if (hz.phase === 'dormant'){ hz.phase = 'warn';  hz.phaseT = 1.1; }
+          else if (hz.phase === 'warn'){ hz.phase = 'erupt'; hz.phaseT = 0.55; hz._justErupted = true; }
+          else if (hz.phase === 'erupt'){ hz.phase = 'after'; hz.phaseT = 1.6; }
+          else { hz.phase = 'dormant'; hz.phaseT = rand(3, 6); }
+        }
+      }
+    },
     buildChests(){
+      const lvl = currentTheme.id;
+      // Loot rooms show up more often the deeper you go.
+      const spawnChance = clamp(0.5 + (lvl - 1) * 0.05, 0, 0.85);
       for(let i=0;i<this.buildings.length;i++){
         const b = this.buildings[i];
-        if (rand(0,1) < 0.55){
+        if (rand(0,1) < spawnChance){
           const pad=28; const cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad);
           const cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad);
           let ovr=false; for(const h of this.hazards){ if(cx>h.x-20 && cx<h.x+h.w+20 && cy>h.y-20 && cy<h.y+h.h+20){ ovr=true; break; } }
           if(ovr) continue;
-          const ch = { id: this.chests.length, x:cx, y:cy, r:16, opened:false, buildingIndex:i };
+          const rarity = rollChestRarity(lvl, state.wave||0);
+          const ch = { id: this.chests.length, x:cx, y:cy, r:16, opened:false, buildingIndex:i, rarity };
           b.hasChest=true; b.chestId = this.chests.length; this.chests.push(ch);
         }
       }
@@ -1063,6 +1493,19 @@
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
 
+      // 🎨 Themed environment texture (grass / sand / ice / lava / void), scrolls with the world
+      const bgTile = getThemeTile(currentTheme);
+      if (bgTile && bgTile.width) {
+        const pat = ctx.createPattern(bgTile, 'repeat');
+        const btx = -((cam.x + cam.sx) % bgTile.width);
+        const bty = -((cam.y + cam.sy) % bgTile.height);
+        ctx.save();
+        ctx.translate(btx, bty);
+        ctx.fillStyle = pat;
+        ctx.fillRect(-btx, -bty, W, H);
+        ctx.restore();
+      }
+
       const grid = 64;
       const ox = -((cam.x + cam.sx) % grid);
       const oy = -((cam.y + cam.sy) % grid);
@@ -1075,6 +1518,9 @@
       for (let y = oy; y < H; y += grid) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
 
       ctx.stroke();
+
+      // ✨ Ambient atmosphere particles matched to this level (fireflies, dust, snow, embers, void motes)
+      drawAmbientParticles(currentTheme, W, H);
 
       const vg = ctx.createRadialGradient(
         W / 2, H / 2, Math.min(W, H) / 3,
@@ -1110,24 +1556,78 @@
             ctx.restore();
           }
 
-          // 🌋 ERUPTION — instant‑kill blast
-          else if (hz.phase === 'eruption') {
-            const g = ctx.createLinearGradient(cx, cy - hz.h, cx, cy);
-            g.addColorStop(0, '#ffffff');
-            g.addColorStop(0.3, '#ffd766');
-            g.addColorStop(1, '#ff6a00');
-            ctx.fillStyle = g;
+          // 🌋 ERUPTION — real explosion: flash + shockwave + fire column + debris
+          else if (hz.phase === 'erupt') {
+            const age = 0.55 - Math.max(0, hz.phaseT);      // 0 → 0.55s since it went off
+            const p = Math.min(1, age / 0.55);               // 0..1 progress
+            const rad = Math.min(hz.w, hz.h) * 0.5;
+            const et = t + (hz.x*0.013 + hz.y*0.017);        // stable per-hazard time offset
 
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.beginPath();
-            ctx.ellipse(0, 0, hz.w * 0.45, hz.h * 1.25, 0, 0, Math.PI * 2);
-            ctx.fill();
+
+            // 💥 initial white-hot flash — very short, punches the screen
+            if (age < 0.1){
+              const flashA = 1 - (age/0.1);
+              ctx.save();
+              ctx.globalCompositeOperation = 'screen';
+              ctx.globalAlpha = flashA;
+              const fg = ctx.createRadialGradient(0,0,0,0,0,rad*2.2);
+              fg.addColorStop(0, '#ffffff');
+              fg.addColorStop(0.5, '#ffe9a0');
+              fg.addColorStop(1, '#ff8a2a00');
+              ctx.fillStyle = fg;
+              ctx.beginPath(); ctx.arc(0,0,rad*2.2,0,Math.PI*2); ctx.fill();
+              ctx.restore();
+            }
+
+            // 💫 double expanding shockwave rings pushing outward across the whole burst
+            drawShockRing(ctx, 0, 0, rad*(0.3+p*2.2), 0.55*(1-p), '#ffcf8a');
+            drawShockRing(ctx, 0, 0, rad*(0.15+p*1.5), 0.4*(1-p*0.8), '#ff6a2a');
+
+            // 🔥 roiling fire column rising out of the pit (fades out over the burst)
+            ctx.globalAlpha = Math.max(0, 1 - p*0.85);
+            drawFlameLicks(ctx, 0, 0, rad*(1.1 - p*0.3), 9, et*1.6, '#ff3a00', '#ff9a2a', '#fff2c0');
+            ctx.globalAlpha = 1;
+
+            // 🌟 molten core glow
+            const g = ctx.createRadialGradient(0,0,0,0,0,rad*1.1);
+            g.addColorStop(0, '#fff2c0');
+            g.addColorStop(0.35, '#ffb060');
+            g.addColorStop(1, '#ff6a0000');
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = Math.max(0, 1-p*0.6);
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(0,0,rad*1.1,0,Math.PI*2); ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // ✨ radiating embers thrown out by the blast
+            drawEmberBurst(ctx, 0, 0, rad*(1 + p*1.6), 14, et, '#ffcf8a');
+
+            // 🪨 flying rock/basalt debris chunks arcing outward and tumbling
+            ctx.globalCompositeOperation = 'source-over';
+            for (let i=0;i<8;i++){
+              const seed = i*137.5 + (hz.x*0.7+hz.y*0.3);
+              const a = seed % (Math.PI*2);
+              const speed = rad*(1.6 + (i%3)*0.5);
+              const dx = Math.cos(a)*speed*p;
+              const dy = Math.sin(a)*speed*p - p*p*rad*0.9; // arc upward then fall
+              const spin = et*6 + seed;
+              const sz = 4 + (i%3)*2;
+              ctx.save();
+              ctx.translate(dx,dy);
+              ctx.rotate(spin);
+              ctx.globalAlpha = Math.max(0, 0.9*(1-p*0.8));
+              ctx.fillStyle = (i%2===0) ? '#3a2418' : '#6b3a1e';
+              ctx.fillRect(-sz/2,-sz/2,sz,sz);
+              ctx.restore();
+            }
+
             ctx.restore();
           }
 
-          // 🔥 BURN PHASE — chip damage only
-          else if (hz.phase === 'burn') {
+          // 🔥 AFTER PHASE — settling embers + rising smoke, chip damage only
+          else if (hz.phase === 'after') {
             ctx.fillStyle = '#3a1a0a';
             ctx.fillRect(x, y, hz.w, hz.h);
 
@@ -1142,6 +1642,24 @@
                 );
               }
             }
+
+            // 💨 soft smoke puffs drifting upward off the smoldering pit
+            const smokeCx = x + hz.w/2, smokeCy = y + hz.h/2;
+            const smokeAge = 1.6 - Math.max(0, hz.phaseT); // 0..1.6s into the after-phase
+            ctx.save();
+            for (let i=0;i<4;i++){
+              const seed = i*61.3 + (hz.x*0.02+hz.y*0.03);
+              const life = ((smokeAge*0.5 + seed) % 1);
+              const sx = smokeCx + Math.sin(seed*3)*hz.w*0.25;
+              const sy = smokeCy - life*hz.h*1.4;
+              const rr = 10 + life*22;
+              ctx.globalAlpha = 0.28*(1-life);
+              ctx.fillStyle = '#2a2018';
+              ctx.beginPath();
+              ctx.arc(sx, sy, rr, 0, Math.PI*2);
+              ctx.fill();
+            }
+            ctx.restore();
           }
 
           // 🧱 COOL PHASE
@@ -1371,19 +1889,18 @@
       ctx.lineWidth=2;
       for(const s of this.solids){
         const x=s.x - cam.x - cam.sx, y=s.y - cam.y - cam.sy;
-        ctx.fillStyle=currentTheme.obs.fill; ctx.strokeStyle=currentTheme.obs.stroke;
-        roundRect(ctx,x,y,s.w,s.h,10); ctx.fill(); ctx.stroke();
+        const isBorder = (s.w >= this.w - 2) || (s.h >= this.h - 2);
+        if (isBorder){
+          drawBorderWall(ctx, s, x, y, currentTheme);
+        } else if (s.w <= 72 && s.h <= 64){
+          drawRockCluster(ctx, s, x, y, currentTheme, 'small');
+        } else {
+          drawRockCluster(ctx, s, x, y, currentTheme, 'large');
+        }
       }
       for(const b of this.buildings){
         const x=b.x - cam.x - cam.sx, y=b.y - cam.y - cam.sy;
-        ctx.fillStyle=currentTheme.obs.fill; ctx.strokeStyle=currentTheme.obs.stroke;
-        roundRect(ctx,x,y,b.w,b.h,10); ctx.fill(); ctx.stroke();
-        ctx.fillStyle='rgba(0,0,0,0.35)'; roundRect(ctx, x+b.t, y+b.t, b.w-2*b.t, b.h-2*b.t, 8); ctx.fill();
-        for(const d of b.doors){
-          const dx=d.x - cam.x - cam.sx, dy=d.y - cam.y - cam.sy;
-          ctx.fillStyle='#111825'; roundRect(ctx,dx,dy,d.w,d.h,4); ctx.fill();
-          ctx.strokeStyle='#88aaff66'; ctx.strokeRect(dx,dy,d.w,d.h);
-        }
+        drawBuildingProper(ctx, b, x, y, currentTheme);
       }
     },
     drawChests(){
@@ -1399,30 +1916,357 @@
 
         const x = ch.x - cam.x - cam.sx;
         const y = ch.y - cam.y - cam.sy;
+        const rar = CHEST_RARITIES[ch.rarity] || CHEST_RARITIES.common;
+        const s = rar.scale;
 
         ctx.save();
         ctx.translate(x,y);
 
-        ctx.fillStyle='#6b4a1a';
-        roundRect(ctx,-14,-10,28,20,4);
+        // Rarity glow — subtle for common, unmistakable for legendary.
+        if (rar.order > 0){
+          const pulse = 0.55 + 0.25 * Math.sin(nowMS()*0.004 + ch.id);
+          ctx.save();
+          ctx.globalAlpha = 0.18 + 0.10*rar.order * pulse;
+          ctx.fillStyle = rar.glow;
+          ctx.beginPath();
+          ctx.arc(0, -2, 20*s + rar.order*3, 0, Math.PI*2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        ctx.fillStyle=rar.wood;
+        roundRect(ctx,-14*s,-10*s,28*s,20*s,4);
         ctx.fill();
 
-        ctx.fillStyle='#9c6a2a';
-        roundRect(ctx,-12,-8,24,16,3);
+        ctx.fillStyle=rar.panel;
+        roundRect(ctx,-12*s,-8*s,24*s,16*s,3);
         ctx.fill();
 
-        ctx.strokeStyle='#e5c26a';
+        ctx.strokeStyle=rar.trim;
         ctx.lineWidth=2;
         ctx.beginPath();
-        ctx.moveTo(-8,0);
-        ctx.lineTo(8,0);
+        ctx.moveTo(-8*s,0);
+        ctx.lineTo(8*s,0);
         ctx.stroke();
 
+        // Corner studs for anything above common, reinforcing the rarity read.
+        if (rar.order > 0){
+          ctx.fillStyle = rar.trim;
+          const cw=3.2, corners=[[-12*s,-8*s],[12*s,-8*s],[-12*s,8*s],[12*s,8*s]];
+          for (const [cx0,cy0] of corners){ ctx.beginPath(); ctx.arc(cx0,cy0,cw,0,Math.PI*2); ctx.fill(); }
+        }
+
         ctx.restore();
+
+        // Label the good stuff so a legendary chest reads at a glance.
+        if (rar.order >= 2){
+          ctx.save();
+          ctx.font = '11px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = rar.glow;
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(rar.label, x, y - 18*s);
+          ctx.restore();
+        }
       }
     }
   };
   function roundRect(c,x,y,w,h,r){ const rr=Math.max(0, Math.min(r, Math.min(w,h)/2)); c.beginPath(); c.moveTo(x+rr,y); c.arcTo(x+w,y,x+w,y+h,rr); c.arcTo(x+w,y+h,x,y+h,rr); c.arcTo(x,y+h,x,y,rr); c.arcTo(x,y,x+w,y,rr); c.closePath(); }
+
+  // Rock / obstacle palettes, themed so boulders read as the level's terrain.
+  function rockPalette(theme){
+    switch (theme.hazards.kind){
+      case 'sand': return { base:'#9c7a48', baseLo:'#5c4426', hi:'#d9bd85', crack:'rgba(50,35,18,0.55)', accent:'#e3cf94', kind:'sand' };
+      case 'ice':  return { base:'#a9d7ec', baseLo:'#5f8ea8', hi:'#f2fcff', crack:'rgba(255,255,255,0.6)', accent:'#eafcff', kind:'ice' };
+      case 'lava': return { base:'#4a3532', baseLo:'#1c1210', hi:'#6b4b42', crack:'rgba(255,120,45,0.9)', accent:'#ff8a3a', kind:'lava' };
+      case 'void': return { base:'#5a4a80', baseLo:'#241a38', hi:'#9075c0', crack:'rgba(208,102,255,0.75)', accent:'#d066ff', kind:'void' };
+      default:     return { base:'#6a7a5c', baseLo:'#343c2c', hi:'#98a982', crack:'rgba(30,25,15,0.45)', accent:'#6ca24f', kind:'moss' };
+    }
+  }
+
+  // Builds a jagged, irregular boulder silhouette (path only — caller fills/strokes/clips).
+  function buildRockPath(ctx, cx, cy, rx, ry, rnd, vertsIn){
+    const verts = vertsIn || (7 + Math.floor(rnd() * 4));
+    ctx.beginPath();
+    for (let i = 0; i < verts; i++){
+      const ang = (i / verts) * Math.PI * 2;
+      const jitter = 0.70 + rnd() * 0.55;
+      const px = cx + Math.cos(ang) * rx * jitter;
+      const py = cy + Math.sin(ang) * ry * jitter;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  // Draws a cluster of jagged boulders/rocks filling a bounding box, themed per level.
+  // 'seedable' rect (world-space x/y/w/h) keeps the same jagged shape every frame without storing state.
+  function drawRockCluster(ctx, rect, x, y, theme, scale){
+    const seed = Math.floor(Math.abs(rect.x * 13.1 + rect.y * 7.7 + rect.w * 3.3 + rect.h * 2.1)) >>> 0;
+    const rnd = makeThemePRNG(seed);
+    const pal = rockPalette(theme);
+    const w = rect.w, h = rect.h;
+    const cx = x + w / 2, cy = y + h / 2;
+    const isLarge = scale === 'large';
+    const n = isLarge ? (2 + Math.floor(rnd() * 3)) : (1 + Math.floor(rnd() * 2));
+
+    const rocks = [];
+    for (let i = 0; i < n; i++){
+      const ox = (rnd() - 0.5) * w * 0.5;
+      const oy = (rnd() - 0.5) * h * 0.5;
+      const rw = w * (isLarge ? (0.40 + rnd() * 0.30) : (0.55 + rnd() * 0.35));
+      const rh = h * (isLarge ? (0.40 + rnd() * 0.30) : (0.55 + rnd() * 0.35));
+      rocks.push({ x: cx + ox, y: cy + oy, rx: rw / 2, ry: rh / 2 });
+    }
+    rocks.sort((a, b) => a.y - b.y);
+
+    // Ground contact shadow so rocks feel planted, not floating.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(cx, y + h + 1, w * 0.40, Math.max(4, h * 0.14), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    for (const r of rocks){
+      ctx.save();
+      buildRockPath(ctx, r.x, r.y, r.rx, r.ry, rnd);
+      const grad = ctx.createLinearGradient(r.x - r.rx, r.y - r.ry, r.x + r.rx, r.y + r.ry);
+      grad.addColorStop(0, pal.hi);
+      grad.addColorStop(0.5, pal.base);
+      grad.addColorStop(1, pal.baseLo);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = pal.baseLo;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      buildRockPath(ctx, r.x, r.y, r.rx, r.ry, rnd);
+      ctx.clip();
+
+      // Faceted shading — a few dark lines radiating from an off-center point, like cut rock faces.
+      const facets = 3 + Math.floor(rnd() * 3);
+      const fx = r.x - r.rx * 0.25, fy = r.y - r.ry * 0.25;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+      for (let f = 0; f < facets; f++){
+        const a1 = rnd() * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + Math.cos(a1) * r.rx * 1.3, fy + Math.sin(a1) * r.ry * 1.3);
+        ctx.stroke();
+      }
+
+      // Cracks / veins, colored per theme.
+      ctx.strokeStyle = pal.crack;
+      ctx.lineWidth = 1.3;
+      for (let c = 0; c < 2; c++){
+        let cx0 = r.x + (rnd() - 0.5) * r.rx, cy0 = r.y + (rnd() - 0.5) * r.ry;
+        ctx.beginPath(); ctx.moveTo(cx0, cy0);
+        let ang = rnd() * Math.PI * 2;
+        for (let s = 0; s < 3; s++){ ang += (rnd() - 0.5) * 1.2; cx0 += Math.cos(ang) * r.rx * 0.32; cy0 += Math.sin(ang) * r.ry * 0.32; ctx.lineTo(cx0, cy0); }
+        ctx.stroke();
+      }
+
+      // Theme-specific surface accent.
+      if (pal.kind === 'moss'){
+        for (let m = 0; m < 3; m++){
+          const mx = r.x + (rnd() - 0.5) * r.rx * 1.3, my = r.y + r.ry * 0.35 + (rnd() - 0.3) * r.ry * 0.5;
+          ctx.fillStyle = pal.accent + 'aa';
+          ctx.beginPath(); ctx.ellipse(mx, my, 4 + rnd() * 4, 2 + rnd() * 2, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (pal.kind === 'ice'){
+        ctx.fillStyle = 'rgba(255,255,255,0.38)';
+        ctx.beginPath(); ctx.ellipse(r.x - r.rx * 0.2, r.y - r.ry * 0.4, r.rx * 0.5, r.ry * 0.25, -0.3, 0, Math.PI * 2); ctx.fill();
+      } else if (pal.kind === 'lava'){
+        ctx.save();
+        ctx.shadowColor = pal.accent; ctx.shadowBlur = 6;
+        ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(r.x - r.rx * 0.4, r.y);
+        ctx.lineTo(r.x, r.y + r.ry * 0.2);
+        ctx.lineTo(r.x + r.rx * 0.4, r.y - r.ry * 0.3);
+        ctx.stroke();
+        ctx.restore();
+      } else if (pal.kind === 'sand'){
+        ctx.strokeStyle = 'rgba(80,60,30,0.4)'; ctx.lineWidth = 1;
+        for (let s = 0; s < 3; s++){
+          const sy0 = r.y - r.ry * 0.5 + s * r.ry * 0.45;
+          ctx.beginPath(); ctx.moveTo(r.x - r.rx * 0.6, sy0); ctx.lineTo(r.x + r.rx * 0.6, sy0 + 2); ctx.stroke();
+        }
+      } else if (pal.kind === 'void'){
+        ctx.save();
+        ctx.shadowColor = pal.accent; ctx.shadowBlur = 8;
+        ctx.fillStyle = pal.accent; ctx.globalAlpha = 0.75;
+        ctx.beginPath(); ctx.arc(r.x, r.y, 2.3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore(); // end clip
+      ctx.restore();
+    }
+  }
+
+  // Reinforced arena boundary wall — visually distinct from the rock obstacles inside it.
+  function drawBorderWall(ctx, rect, x, y, theme){
+    ctx.save();
+    ctx.fillStyle = theme.obs.fill;
+    ctx.fillRect(x, y, rect.w, rect.h);
+    ctx.strokeStyle = theme.obs.stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, rect.w - 2, rect.h - 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    if (rect.w >= rect.h){
+      for (let px = x + 20; px < x + rect.w - 10; px += 40){ ctx.beginPath(); ctx.moveTo(px, y + 3); ctx.lineTo(px, y + rect.h - 3); ctx.stroke(); }
+    } else {
+      for (let py = y + 20; py < y + rect.h - 10; py += 40){ ctx.beginPath(); ctx.moveTo(x + 3, py); ctx.lineTo(x + rect.w - 3, py); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+
+
+  // Real-looking building: ground shadow, beveled/coursed walls, textured roof
+  // with ridge + vents, and framed doorways — replaces the old flat blueprint rect.
+  function drawBuildingProper(ctx, b, x, y, theme){
+    const w = b.w, h = b.h, t = b.t;
+    const seed = (b.x*0.021 + b.y*0.017); // stable per-building pseudo-random
+    const rnd = (n) => { const v = Math.sin(seed*97.13 + n*13.7) * 43758.5453; return v - Math.floor(v); };
+
+    ctx.save();
+
+    // 🌑 ground shadow — grounds the building in the world
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(x + w/2 + 5, y + h/2 + 9, w/2 + 4, h/2 + 2, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // 🧱 outer wall block, beveled (lit top-left, shadowed bottom-right)
+    ctx.fillStyle = theme.obs.fill;
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.fill();
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.clip();
+    const bevel = ctx.createLinearGradient(x, y, x+w, y+h);
+    bevel.addColorStop(0, 'rgba(255,255,255,0.14)');
+    bevel.addColorStop(0.45, 'rgba(255,255,255,0)');
+    bevel.addColorStop(1, 'rgba(0,0,0,0.32)');
+    ctx.fillStyle = bevel;
+    ctx.fillRect(x, y, w, h);
+
+    // 🧱 brick/stone coursing texture within the wall band (top/bottom/left/right)
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth = 1;
+    const brick = 16;
+    ctx.beginPath();
+    for (let bx = x + (brick - (b.x % brick)); bx < x + w; bx += brick){
+      ctx.moveTo(bx, y); ctx.lineTo(bx, y + t);
+      ctx.moveTo(bx, y + h - t); ctx.lineTo(bx, y + h);
+    }
+    for (let by = y + (brick - (b.y % brick)); by < y + h; by += brick){
+      ctx.moveTo(x, by); ctx.lineTo(x + t, by);
+      ctx.moveTo(x + w - t, by); ctx.lineTo(x + w, by);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.strokeStyle = theme.obs.stroke;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.stroke();
+
+    // 🪨 corner stone accents
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    const cs = 10;
+    ctx.fillRect(x+2, y+2, cs, cs);
+    ctx.fillRect(x+w-2-cs, y+2, cs, cs);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(x+2, y+h-2-cs, cs, cs);
+    ctx.fillRect(x+w-2-cs, y+h-2-cs, cs, cs);
+
+    // 🏠 roof / interior — textured panel with ridge highlight + vignette
+    const ix = x+t, iy = y+t, iw = w-2*t, ih = h-2*t;
+    if (iw > 0 && ih > 0){
+      ctx.save();
+      roundRect(ctx, ix, iy, iw, ih, 8);
+      ctx.clip();
+
+      const roofBase = ctx.createLinearGradient(ix, iy, ix, iy+ih);
+      roofBase.addColorStop(0, 'rgba(0,0,0,0.55)');
+      roofBase.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = roofBase;
+      ctx.fillRect(ix, iy, iw, ih);
+
+      // subtle roof panel seams
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const panel = 28;
+      for (let px = ix; px < ix+iw; px += panel){ ctx.moveTo(px, iy); ctx.lineTo(px, iy+ih); }
+      for (let py = iy; py < iy+ih; py += panel){ ctx.moveTo(ix, py); ctx.lineTo(ix+iw, py); }
+      ctx.stroke();
+
+      // ridge highlight down the long axis, like a gabled roof seen from above
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (iw >= ih){ ctx.moveTo(ix, iy+ih/2); ctx.lineTo(ix+iw, iy+ih/2); }
+      else { ctx.moveTo(ix+iw/2, iy); ctx.lineTo(ix+iw/2, iy+ih); }
+      ctx.stroke();
+
+      // edge vignette so the roof reads as recessed, not flat
+      const vig = ctx.createRadialGradient(ix+iw/2, iy+ih/2, Math.min(iw,ih)*0.2, ix+iw/2, iy+ih/2, Math.max(iw,ih)*0.7);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(ix, iy, iw, ih);
+
+      // a roof vent / skylight or two, deterministic per building
+      const detailCount = iw*ih > 20000 ? 2 : 1;
+      for (let i=0;i<detailCount;i++){
+        const dx = ix + iw*(0.25 + 0.5*rnd(i*3+1));
+        const dy = iy + ih*(0.25 + 0.5*rnd(i*3+2));
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        roundRect(ctx, dx-9, dy-6, 18, 12, 3); ctx.fill();
+        ctx.strokeStyle = theme.obs.stroke;
+        ctx.lineWidth = 1;
+        roundRect(ctx, dx-9, dy-6, 18, 12, 3); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(dx-7, dy-4, 14, 3);
+      }
+
+      ctx.restore();
+    }
+
+    // 🚪 doorways — framed threshold instead of a bare dark rect
+    for (const d of b.doors){
+      const dx = d.x - (b.x - x), dy = d.y - (b.y - y);
+      ctx.save();
+      // frame (slightly larger than the gap, in wall tone)
+      ctx.fillStyle = theme.obs.fill;
+      roundRect(ctx, dx-2, dy-2, d.w+4, d.h+4, 4); ctx.fill();
+      // recessed dark threshold
+      const doorGrad = ctx.createLinearGradient(dx, dy, dx+d.w, dy+d.h);
+      doorGrad.addColorStop(0, '#0a0e16');
+      doorGrad.addColorStop(1, '#1a2233');
+      ctx.fillStyle = doorGrad;
+      roundRect(ctx, dx, dy, d.w, d.h, 3); ctx.fill();
+      ctx.strokeStyle = '#88aaff77';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, dx, dy, d.w, d.h, 3); ctx.stroke();
+      // threshold step line
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (d.side === 'top' || d.side === 'bottom'){ ctx.moveTo(dx, dy + d.h/2); ctx.lineTo(dx+d.w, dy+d.h/2); }
+      else { ctx.moveTo(dx+d.w/2, dy); ctx.lineTo(dx+d.w/2, dy+d.h); }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
   const pointInRect=(px,py, r)=> px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h;
 
   function drawServerWallsOnly(){
@@ -1592,6 +2436,8 @@
   }
 
   ents.wisps = [];
+  ents.balls = [];
+  ents.golem = null;
   window._ents = ents;
   // ===========================
   // WORLD VFX (3D, persistent)
@@ -1631,6 +2477,29 @@
           }
         }
 
+        // Stone Pillar: solid obstacle — blocks enemy movement & shots
+        if (v.type === 'stonePillar'){
+          const R = (v.r ?? 30);
+          for (const e of ents.enemies){
+            const dx = e.x - v.x, dy = e.y - v.y;
+            const d2 = dx*dx + dy*dy;
+            const minD = R + (e.r ?? 16);
+            if (d2 < minD*minD && d2 > 0.01){
+              const d = Math.sqrt(d2);
+              e.x += (dx/d) * (minD - d);
+              e.y += (dy/d) * (minD - d);
+            }
+          }
+          for (let bi = ents.ebullets.length - 1; bi >= 0; bi--){
+            const b = ents.ebullets[bi];
+            const dx = b.x - v.x, dy = b.y - v.y;
+            if (dx*dx + dy*dy <= (R + (b.r??4))*(R + (b.r??4))){
+              addEffect(b.x, b.y, 'pop', 0.2, '#c8b28a');
+              ents.ebullets.splice(bi,1);
+            }
+          }
+        }
+
         // Maelstrom: pull + damage
         // 🌊 MAELSTROM — QUICKSAND BEHAVIOUR (CIRCULAR PIT)
         if (v.type === 'maelstrom') {
@@ -1664,12 +2533,30 @@
   // ================================
   // ADVANCED GLYPH VFX HELPERS
   // ================================
+  // Safely append an alpha suffix to ANY color string for use in addColorStop/fillStyle.
+  // Expands shorthand hex (#fff, #fff8) to full 6-digit form first, since '#fff'+'ee'
+  // produces the invalid 5-digit string '#fffee'. Falls back to white if unparseable.
+  function withAlpha(color, alphaHex){
+    let c = color || '#ffffff';
+    if (c[0] === '#'){
+      let hex = c.slice(1);
+      if (hex.length === 3 || hex.length === 4){
+        hex = hex.split('').map(ch => ch+ch).join('');
+      }
+      if (hex.length === 6 || hex.length === 8){
+        return '#' + hex.slice(0,6) + alphaHex;
+      }
+      return '#ffffff' + alphaHex; // unrecognized hex length — safe fallback
+    }
+    return '#ffffff' + alphaHex; // named colors / rgb() etc. — safe fallback
+  }
+
   function drawGlowOrb(ctx, x, y, r, col, pulse=1){
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     const g = ctx.createRadialGradient(x,y,0,x,y,r*2);
-    g.addColorStop(0, `${col}cc`);
-    g.addColorStop(0.4, `${col}66`);
+    g.addColorStop(0, withAlpha(col,'cc'));
+    g.addColorStop(0.4, withAlpha(col,'66'));
     g.addColorStop(1, '#0000');
     ctx.globalAlpha = 0.6 * pulse;
     ctx.fillStyle = g;
@@ -1729,6 +2616,262 @@
     ctx.beginPath();
     ctx.moveTo(x1,y1);
     ctx.lineTo(x2,y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ================================
+  // REALISTIC GLYPH FX PRIMITIVES (v2)
+  // ================================
+  function jaggedLightningPath(x1,y1,x2,y2,segments=7,spread=18){
+    const pts = [{x:x1,y:y1}];
+    const nx = -(y2-y1), ny = (x2-x1);
+    const nl = Math.hypot(nx,ny) || 1;
+    for (let i=1;i<segments;i++){
+      const tt = i/segments;
+      const bx = x1 + (x2-x1)*tt;
+      const by = y1 + (y2-y1)*tt;
+      const off = (Math.random()*2-1)*spread*(1-Math.abs(tt-0.5)*1.2);
+      pts.push({ x: bx + (nx/nl)*off, y: by + (ny/nl)*off });
+    }
+    pts.push({x:x2,y:y2});
+    return pts;
+  }
+
+  function strokePath(ctx, pts){
+    ctx.beginPath();
+    pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+    ctx.stroke();
+  }
+
+  // Real forked lightning bolt (used for static discharge + chain jumps)
+  function drawLightningBolt(ctx, x1,y1,x2,y2, col='#bfefff', alpha=1, width=3, withForks=true){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const main = jaggedLightningPath(x1,y1,x2,y2, 7, 16);
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // outer glow pass
+    ctx.strokeStyle = col;
+    ctx.lineWidth = width*3.4;
+    ctx.globalAlpha = alpha*0.22;
+    strokePath(ctx, main);
+
+    // white-hot core
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = width;
+    strokePath(ctx, main);
+
+    // color tint pass
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1, width*0.6);
+    ctx.globalAlpha = alpha*0.85;
+    strokePath(ctx, main);
+
+    // small crackling forks off the main bolt
+    if (withForks){
+      ctx.lineWidth = Math.max(1,width*0.4);
+      ctx.globalAlpha = alpha*0.55;
+      for (let i=1;i<main.length-1;i++){
+        if (Math.random() < 0.55) continue;
+        const p = main[i];
+        const a = Math.random()*Math.PI*2;
+        const len = 8 + Math.random()*16;
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);
+        ctx.lineTo(p.x + Math.cos(a)*len, p.y + Math.sin(a)*len);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // Organic flame licks (bezier tongues) — replaces plain spike lines for fire
+  function drawFlameLicks(ctx, x, y, r, count, t, colOuter='#ff3a00', colMid='#ff8a2a', colCore='#fff2c0'){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i=0;i<count;i++){
+      const a = (i/count)*Math.PI*2 + Math.sin(t*1.3+i)*0.3;
+      const wob = 0.75 + 0.35*Math.sin(t*7 + i*1.7);
+      const len = r * (0.65 + 0.5*wob);
+      const bx = x + Math.cos(a)*r*0.35;
+      const by = y + Math.sin(a)*r*0.35;
+      const tipx = x + Math.cos(a)*len;
+      const tipy = y + Math.sin(a)*len - len*0.28; // flames lean upward
+      const swirl = 7*Math.sin(t*5+i);
+      const midx = (bx+tipx)/2 + Math.cos(a+Math.PI/2)*swirl;
+      const midy = (by+tipy)/2 + Math.sin(a+Math.PI/2)*swirl;
+
+      const g = ctx.createLinearGradient(bx,by,tipx,tipy);
+      g.addColorStop(0, withAlpha(colOuter,'cc'));
+      g.addColorStop(0.55, withAlpha(colMid,'aa'));
+      g.addColorStop(1, withAlpha(colCore,'00'));
+
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, by);
+      ctx.quadraticCurveTo(midx, midy, tipx, tipy);
+      ctx.quadraticCurveTo(midx, midy, bx + 4, by);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Rising / radiating embers driven purely by time (no particle pool needed)
+  function drawEmberBurst(ctx, x, y, r, count, t, col='#ffb060'){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i=0;i<count;i++){
+      const seed = i*97.13;
+      const life = ((t*0.6 + seed) % 1);
+      const a = seed % (Math.PI*2);
+      const dist = r * (0.3 + life*1.15);
+      const ex = x + Math.cos(a)*dist;
+      const ey = y + Math.sin(a)*dist - life*life*r*0.6;
+      const size = Math.max(0.4, 3.2*(1-life));
+      ctx.globalAlpha = 0.85*(1-life);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(ex,ey,size,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Angular ice crystal shards (freeze / permafrost / chill)
+  function drawFrostShards(ctx, x, y, r, count, t, col='#d7f6ff'){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = withAlpha(col,'aa');
+    for (let i=0;i<count;i++){
+      const a = (i/count)*Math.PI*2 + 0.4;
+      const len = r*(0.55 + 0.25*Math.sin(t*2+i*2));
+      const bx = x + Math.cos(a)*r*0.3;
+      const by = y + Math.sin(a)*r*0.3;
+      const tipx = x + Math.cos(a)*len;
+      const tipy = y + Math.sin(a)*len;
+      const perp = a + Math.PI/2;
+      const w = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(perp)*w, by + Math.sin(perp)*w);
+      ctx.lineTo(tipx, tipy);
+      ctx.lineTo(bx - Math.cos(perp)*w, by - Math.sin(perp)*w);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // Concentric water ripples (drench aura / ripple shot splash)
+  function drawRippleRings(ctx, x, y, r, t, col='#7fd8ff', rings=3){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i=0;i<rings;i++){
+      const phase = ((t*0.9 + i/rings) % 1);
+      const rr = r * (0.35 + phase*0.9);
+      ctx.globalAlpha = 0.5*(1-phase);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.ellipse(x,y,rr,rr*0.42,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Jagged rock shards (thornmail / spiked barrier / earth impacts)
+  function drawRockShards(ctx, x, y, r, count, t, col='#9c8a6e', colLit='#d9ffe6'){
+    ctx.save();
+    for (let i=0;i<count;i++){
+      const a = (i/count)*Math.PI*2 + (i%2?0.25:-0.15);
+      const jitter = Math.sin(t*3+i*3)*3;
+      const len = r*(0.6+0.3*Math.sin(i*13.7));
+      const bx = x + Math.cos(a)*r*0.28;
+      const by = y + Math.sin(a)*r*0.28;
+      const tipx = x + Math.cos(a)*(len+jitter);
+      const tipy = y + Math.sin(a)*(len+jitter)*0.7;
+      const perp = a + Math.PI/2;
+      const w = 4.5;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(perp)*w, by + Math.sin(perp)*w);
+      ctx.lineTo(tipx, tipy);
+      ctx.lineTo(bx - Math.cos(perp)*w, by - Math.sin(perp)*w);
+      ctx.closePath();
+      ctx.fillStyle = col;
+      ctx.fill();
+      ctx.strokeStyle = colLit;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // Fine dust/blood drip particles (jagged earth bleed)
+  function drawDripParticles(ctx, x, y, r, count, t, col='#c0392b'){
+    ctx.save();
+    for (let i=0;i<count;i++){
+      const seed = i*53.7;
+      const life = ((t*0.5 + seed) % 1);
+      const a = seed % (Math.PI*2);
+      const dx = x + Math.cos(a)*r*0.5;
+      const dy = y + Math.sin(a)*r*0.2 + life*r*1.4;
+      ctx.globalAlpha = 0.75*(1-life);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.ellipse(dx,dy, 1.6, 3.2, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Trailing spectral wisp motes (spirit haunt aura)
+  function drawSpectralTrail(ctx, x, y, r, t, col='#c98bff'){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i=0;i<5;i++){
+      const trail = i/5;
+      const a = t*1.1 - trail*1.4;
+      const rr = r*(0.55+trail*0.25);
+      const wx = x + Math.cos(a)*rr;
+      const wy = y + Math.sin(a)*rr;
+      ctx.globalAlpha = 0.5*(1-trail);
+      const g = ctx.createRadialGradient(wx,wy,0,wx,wy,7);
+      g.addColorStop(0, withAlpha(col,'ee'));
+      g.addColorStop(1, withAlpha(col,'00'));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(wx,wy,7,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Double-layer expanding shockwave ring (AoE procs: detonate, thunderclap, permafrost, quake)
+  function drawShockRing(ctx, x, y, r, alpha, col='#ffffff'){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(x,y,Math.max(0,r),0,Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = Math.max(0, alpha*0.5);
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.arc(x,y,Math.max(0,r*0.92),0,Math.PI*2);
     ctx.stroke();
     ctx.restore();
   }
@@ -2044,6 +3187,39 @@
   function setWeapon(i){ player.weapon=(i+weapons.length)%weapons.length; const w=weapons[player.weapon]; weaponName.textContent=w.name; if(player.ammo>w.ammo) player.ammo=w.ammo; updateHUD(); }
   function swapWeapon(d){ setWeapon(player.weapon+d); audio.click(); }
   function playerTryReload(){ const w=weapons[player.weapon]; if(player.reloading||player.ammo>=w.ammo||player.reserve<=0) return; player.reloading=true; player.reloadT=w.reload; audio.reload(); }
+  // Walks along the dash direction in small steps and stops just short of any
+  // wall/obstacle, instead of teleporting straight through them.
+  function sweptDashDistance(ox, oy, ax, ay, maxDist, r){
+    if (isNetActive() && !HAS_SERVER_WORLD) return maxDist; // no local geometry to test against
+    const steps = Math.max(6, Math.ceil(maxDist / 10));
+    const stepLen = maxDist / steps;
+    let safeDist = 0;
+    for (let i = 1; i <= steps; i++){
+      const nx = ox + ax * stepLen * i;
+      const ny = oy + ay * stepLen * i;
+      if (world.isBlocked(nx, ny, r)) break;
+      safeDist = stepLen * i;
+    }
+    return safeDist;
+  }
+
+  // Neon dash trail — a soft outer glow + bright core streak that fades quickly,
+  // instead of the player just popping from A to B with no in-between motion cue.
+  function spawnDashTrail(x1, y1, x2, y2, col){
+    const c = col || (ELEM_STYLE[player.glyphPath]?.main) || '#39ffe0';
+    ents.effects.push({ type:'dashTrail', x1, y1, x2, y2, col:c, life:0.32, t:0 });
+    // a few fading afterimage ticks along the path for extra motion-streak feel
+    const n = 4;
+    for (let i=1;i<=n;i++){
+      const p = i/n;
+      ents.effects.push({
+        type:'dashGhost',
+        x: x1 + (x2-x1)*p, y: y1 + (y2-y1)*p,
+        col: c, life: 0.22 + 0.05*(1-p), t: 0, r: 14
+      });
+    }
+  }
+
   function playerDash(){
     if(player.dashCD>0) return;
 
@@ -2054,10 +3230,12 @@
       const dist = 280;
       const ax=Math.cos(player.angle), ay=Math.sin(player.angle);
       const ox = player.x, oy = player.y;
-      player.x += ax*dist; player.y += ay*dist;
+      const safeDist = sweptDashDistance(ox, oy, ax, ay, dist, player.r);
+      player.x = ox + ax*safeDist; player.y = oy + ay*safeDist;
       player.x=clamp(player.x,60,world.w-60); player.y=clamp(player.y,60,world.h-60);
       addEffect(ox,oy,'pop',0.22,'#9fe3ff');
       addEffect(player.x,player.y,'pop',0.22,'#9fe3ff');
+      spawnDashTrail(ox, oy, player.x, player.y, '#9fe3ff');
       player.dashCD=2.2;
       audio.dash();
       return;
@@ -2067,18 +3245,20 @@
     const ax=Math.cos(player.angle), ay=Math.sin(player.angle);
     const ox = player.x, oy = player.y;
 
-    player.x+=ax*dash; player.y+=ay*dash;
+    const safeDist = sweptDashDistance(ox, oy, ax, ay, dash, player.r);
+    player.x = ox + ax*safeDist; player.y = oy + ay*safeDist;
     player.x=clamp(player.x,60,world.w-60); player.y=clamp(player.y,60,world.h-60);
+    spawnDashTrail(ox, oy, player.x, player.y);
 
     // Fire Phoenix Step: flame burst + clear slows
     if (isPath('fire') && hasG('fire','phoenixStep')){
       player.slowT = 0;
-      aoeDamage(player.x, player.y, 95, 10, { col:'#ff6a2a', burn:true });
+      aoeDamage(player.x, player.y, 95, 10, { col:'#ff6a2a', burn:true, kind:'fire' });
     }
 
     // Lightning Static Dash: shock line (simple version)
     if (isPath('lightning') && hasG('lightning','staticDash')){
-      aoeDamage((ox+player.x)/2, (oy+player.y)/2, 90, 8, { col:'#9fe3ff', stun:0.18 });
+      aoeDamage((ox+player.x)/2, (oy+player.y)/2, 90, 8, { col:'#9fe3ff', stun:0.18, kind:'lightning' });
     }
 
     cam.shake=Math.max(cam.shake,8);
@@ -2323,6 +3503,13 @@
     best:parseInt(localStorage.getItem('arenaBest')||'0',10)||0,
     spawnT:0, nextWaveT:0, diff:1.0,
     playerExploded:false,
+    pvpGlyphT: 60,             // seconds until next practice-PvP glyph window (no waves to gate it)
+
+    // ===== Practice PvP match tracking =====
+    pvpBotsTotal: 0,           // bots present at the start of this PvP match
+    pvpMatchClock: 0,          // seconds survived this match (PvP only)
+    victoryShown: false,       // one-shot latch so victory only fires once
+    zone: null,                // shrinking "death circle" state (PvP only)
 
     // ===== Glyph progression =====
     phase: 'combat',          // 'combat' | 'glyph'
@@ -2971,7 +4158,7 @@ if (btnHomeCustomize){
     let bestD2 = dist2(x, y, player.x, player.y);
 
     // ✅ include bots
-    for (const b of SP_BOTS){
+    if (window.BOTS_ENABLED) for (const b of SP_BOTS){
       if (!b || b.hp <= 0) continue;
       const d2 = dist2(x, y, b.x, b.y);
       if (d2 < bestD2){
@@ -3176,7 +4363,12 @@ if (btnHomeCustomize){
         if (opts.freeze) freeze(e, opts.freeze);
       }
     }
-    addEffect(x,y,'pop',0.35, opts.col || '#fff');
+    // ✅ proper elemental burst visuals instead of a plain stroked circle
+    if (opts.kind){
+      ents.effects.push({ type:'elemBurst', kind: opts.kind, x, y, r, life: 0.55, t: 0 });
+    } else {
+      addEffect(x,y,'pop',0.35, opts.col || '#fff');
+    }
     cam.shake = Math.max(cam.shake, 3.5);
   }
 
@@ -3196,23 +4388,120 @@ if (btnHomeCustomize){
 
   // ----- Ball lightning follower -----
   function tickBallLightning(dt){
-    if (!isPath('lightning') || !hasG('lightning','ballLightning')) return;
-    player._ballCD = Math.max(0, (player._ballCD||0) - dt);
+    if (!isPath('lightning') || !hasG('lightning','ballLightning')){
+      ents.balls.length = 0;
+      return;
+    }
 
-    // zap nearest enemy periodically
+    // ✅ ensure the orb exists and follows the player (this was missing —
+    // the ability computed damage but never had a visible entity)
+    if (!ents.balls.length){
+      ents.balls.push({
+        angle: Math.random()*Math.PI*2,
+        radius: 60,
+        x: player.x, y: player.y,
+        zapT: 0,
+        targetX: player.x, targetY: player.y
+      });
+    }
+    const orb = ents.balls[0];
+    orb.angle += dt * 1.1;
+    orb.x = player.x + Math.cos(orb.angle) * orb.radius;
+    orb.y = player.y + Math.sin(orb.angle) * orb.radius;
+
+    player._ballCD = Math.max(0, (player._ballCD||0) - dt);
+    if (orb.zapT > 0) orb.zapT -= dt;
+
+    // zap nearest enemy periodically, FROM the orb's position
     if (player._ballCD <= 0){
       let best=null, bestD2=420*420;
       for (const e of ents.enemies){
-        const d2 = dist2(player.x,player.y,e.x,e.y);
+        const d2 = dist2(orb.x,orb.y,e.x,e.y);
         if (d2 < bestD2){ bestD2=d2; best=e; }
       }
       if (best){
         best.hp -= 10;
-        // discharge visual
+        orb.targetX = best.x; orb.targetY = best.y;
+        orb.zapT = 0.16; // draws the arc for this long
         addEffect(best.x,best.y,'hit',0.18,'#9fe3ff');
         cam.shake = Math.max(cam.shake, 2);
       }
       player._ballCD = 0.45;
+    }
+  }
+
+  // ----- Golem: slow summoned ally that pulls enemies toward it -----
+  function tickGolem(dt){
+    if (!isPath('earth') || !hasG('earth','golem')){
+      ents.golem = null;
+      return;
+    }
+    if (!ents.golem){
+      ents.golem = {
+        x: player.x + 40, y: player.y + 40,
+        r: 26,
+        slamCD: 2.5
+      };
+    }
+    const g = ents.golem;
+
+    // find nearest enemy to lumber toward (stays useful without wandering off)
+    let best=null, bestD2=520*520;
+    for (const e of ents.enemies){
+      const d2 = dist2(g.x,g.y,e.x,e.y);
+      if (d2 < bestD2){ bestD2=d2; best=e; }
+    }
+    if (best){
+      const dx = best.x - g.x, dy = best.y - g.y;
+      const d = Math.hypot(dx,dy) || 1;
+      if (d > 70){ g.x += (dx/d)*70*dt; g.y += (dy/d)*70*dt; }
+    } else {
+      // no targets: drift back toward the player
+      const dx = player.x - g.x, dy = player.y - g.y;
+      const d = Math.hypot(dx,dy) || 1;
+      if (d > 90){ g.x += (dx/d)*70*dt; g.y += (dy/d)*70*dt; }
+    }
+
+    // 🪨 taunt/pull: steadily draw nearby enemies toward the golem
+    const pullR = 170;
+    for (const e of ents.enemies){
+      const dx = g.x - e.x, dy = g.y - e.y;
+      const d2 = dx*dx+dy*dy;
+      if (d2 < pullR*pullR && d2 > 4){
+        const d = Math.sqrt(d2);
+        e.x += (dx/d) * 34 * dt;
+        e.y += (dy/d) * 34 * dt;
+      }
+    }
+
+    g.slamCD -= dt;
+    if (g.slamCD <= 0){
+      g.slamCD = 2.5;
+      aoeDamage(g.x, g.y, 90, 16, { col:'#7dffa3', stun:0.2, kind:'earth' });
+      addWorldVfx({ type:'quake', x: g.x, y: g.y, r: 100, life: 0.4, maxLife: 0.4 });
+      cam.shake = Math.max(cam.shake, 3);
+    }
+  }
+
+  // ----- Guardian Spirits: wisps intercept enemy shots -----
+  function tickGuardianSpirits(dt){
+    if (!isPath('spirit') || !hasG('spirit','guardianSpirits') || !ents.wisps.length) return;
+    for (const w of ents.wisps){
+      w.interceptCD = Math.max(0, (w.interceptCD||0) - dt);
+    }
+    for (let i = ents.ebullets.length - 1; i >= 0; i--){
+      const b = ents.ebullets[i];
+      if (b.kind === 'bomb') continue; // don't eat bombs — too strong a counter
+      for (const w of ents.wisps){
+        if ((w.interceptCD||0) > 0) continue;
+        const rr = 30*30;
+        if (dist2(b.x,b.y,w.x,w.y) <= rr){
+          w.interceptCD = 3.0;
+          addEffect(w.x, w.y, 'pop', 0.25, '#e7c7ff');
+          ents.ebullets.splice(i,1);
+          break;
+        }
+      }
     }
   }
 
@@ -3257,6 +4546,20 @@ if (btnHomeCustomize){
           if (d2 < bestD2){
             best = e;
             bestD2 = d2;
+          }
+        }
+
+        // ✅ In practice PvP there are no monsters — wisps previously only
+        // ever scanned ents.enemies, so they'd sit idle forever. Let them
+        // target bots too whenever bots are actually hostile.
+        if (window.BOTS_ENABLED && window.PVP_MODE && typeof SP_BOTS !== 'undefined'){
+          for (const bot of SP_BOTS){
+            if (bot.hp <= 0) continue;
+            const d2 = dist2(w.x, w.y, bot.x, bot.y);
+            if (d2 < bestD2){
+              best = bot;
+              bestD2 = d2;
+            }
           }
         }
 
@@ -3322,7 +4625,7 @@ if (btnHomeCustomize){
       freeze(e, hasG('water','permafrost') ? 1.15 : 0.8);
       // Permafrost shatter AOE
       if (hasG('water','permafrost')){
-        aoeDamage(e.x,e.y, 90, 18, { col:'#9fe3ff' });
+        aoeDamage(e.x,e.y, 90, 18, { col:'#9fe3ff', kind:'water' });
       }
       e.drenchStacks = 0;
       e.drenchT = 0;
@@ -3385,7 +4688,7 @@ if (btnHomeCustomize){
       }
 
       if (hasG('fire','detonate') && s.burnStacks >= 3){
-        aoeDamage(e.x,e.y,110,24,{col:'#ff6a2a',burn:true});
+        aoeDamage(e.x,e.y,110,24,{col:'#ff6a2a',burn:true,kind:'fire'});
         s.burnStacks = 0;
         s.burnT = 0;
       }
@@ -3407,9 +4710,11 @@ if (btnHomeCustomize){
 
         e.hp -= 14;
         addEffect(e.x,e.y,'hit',0.18,'#9fe3ff');
+        // ⚡ real bolt from the player into the discharging target
+        ents.effects.push({ type:'boltStrike', x1: player.x, y1: player.y, x2: e.x, y2: e.y, life: 0.22, t: 0 });
 
         if (hasG('lightning','thunderclap')){
-          aoeDamage(e.x,e.y,90,10,{col:'#9fe3ff',stun:0.25});
+          aoeDamage(e.x,e.y,90,10,{col:'#9fe3ff',stun:0.25,kind:'lightning'});
         }
 
         if (hasG('lightning','arcJump') || hasG('lightning','forkedArc') || hasG('lightning','stormConductor')){
@@ -3429,6 +4734,8 @@ if (btnHomeCustomize){
 
             best.hp -= hasG('lightning','forkedArc') ? 7 : 10;
             addEffect(best.x,best.y,'hit',0.14,'#9fe3ff');
+            // ⚡ chained bolt arcing from the previous target to this one
+            ents.effects.push({ type:'boltStrike', x1: last.x, y1: last.y, x2: best.x, y2: best.y, life: 0.2, t: 0 });
             last = best;
           }
         }
@@ -3525,7 +4832,7 @@ if (btnHomeCustomize){
       if (hasG('fire','volcanicCore')){
         player._killCount = (player._killCount||0) + 1;
         if (player._killCount % 8 === 0){
-          aoeDamage(e.x,e.y, 140, 22, { col:'#ff6a2a', burn:true });
+          aoeDamage(e.x,e.y, 140, 22, { col:'#ff6a2a', burn:true, kind:'fire' });
         }
       }
     }
@@ -3721,6 +5028,44 @@ if (btnHomeCustomize){
       }
     } catch (err) { }
 
+    // ===== BULLET DODGE — react to incoming player fire =====
+    // Previously enemies only ever pathed toward the player, so standing
+    // still and firing was a guaranteed hit. Alerted enemies now watch for
+    // player bullets on a collision course and juke perpendicular to them.
+    if (e.alerted && ents.bullets && ents.bullets.length){
+      e.dodgeCD = (e.dodgeCD || 0) - dt;
+      if (e.dodgeSign == null) e.dodgeSign = (rand(0,1) < 0.5) ? 1 : -1;
+
+      let threat = null, threatD2 = Infinity;
+      for (const bl of ents.bullets){
+        if (!bl || bl.fromBot) continue; // only dodge real player/wisp fire
+        const dx = e.x - bl.x, dy = e.y - bl.y;
+        const d2b = dx*dx + dy*dy;
+        if (d2b > 260*260) continue;
+        const spd2 = bl.vx*bl.vx + bl.vy*bl.vy;
+        if (spd2 < 1) continue;
+        const t = -(dx*bl.vx + dy*bl.vy) / spd2;
+        if (t < 0 || t > 0.5) continue; // bullet already past, or too far off
+        const cx = bl.x + bl.vx*t, cy = bl.y + bl.vy*t;
+        const missDx = e.x - cx, missDy = e.y - cy;
+        const dangerR = (e.r || 16) + 55;
+        if (missDx*missDx + missDy*missDy > dangerR*dangerR) continue;
+        if (d2b < threatD2){ threatD2 = d2b; threat = bl; }
+      }
+
+      if (threat && e.dodgeCD <= 0){
+        if (rand(0,1) < 0.08) e.dodgeSign *= -1; // occasionally switch sides
+        const bDir = Math.atan2(threat.vy, threat.vx);
+        const perp = bDir + Math.PI/2 * e.dodgeSign;
+        // Nimble swarm types react fast and often; tanks barely bother.
+        const reactChance = e.type === 'tank' ? 0.35 : e.type === 'swarm' ? 0.85 : 0.65;
+        if (rand(0,1) < reactChance){
+          ax = Math.cos(perp); ay = Math.sin(perp);
+        }
+        e.dodgeCD = 0.4 + rand(0,0.3);
+      }
+    }
+
     const n=Math.hypot(ax,ay)||1; ax/=n; ay/=n;
     let spd = e.speed * state.diff * (1 + state.wave*0.01);
     if(e.type==='tank') spd*=0.9; if(e.type==='swarm') spd*=1.15; if(e.type==='boss') spd*=1.05;
@@ -3793,7 +5138,7 @@ if (btnHomeCustomize){
   }
 
   // Bullets / effects / pickups / chests -------------------------------------
-  function spawnBullet(x,y,a, speed,dmg,pierce=0){ ents.bullets.push({x,y,vx:Math.cos(a)*speed, vy:Math.sin(a)*speed, r:4, dmg, life:1.2, pierce}); }
+  function spawnBullet(x,y,a, speed,dmg,pierce=0){ const b={x,y,vx:Math.cos(a)*speed, vy:Math.sin(a)*speed, r:4, dmg, life:1.2, pierce}; ents.bullets.push(b); return b; }
   function spawnEBullet(x,y,a, speed,dmg){ ents.ebullets.push({x,y,vx:Math.cos(a)*speed, vy:Math.sin(a)*speed, r:4, dmg, life:2.5}); }
   function spawnBomb(x,y,a, speed,dmg, splashR=110, fuse=0.75){ ents.ebullets.push({ x,y, vx:Math.cos(a)*speed, vy:Math.sin(a)*speed, r:6, dmg, life:fuse, kind:'bomb', splashR }); }
   function addEffect(x,y,type,life=0.4,color='#9cf'){ ents.effects.push({x,y,type,life,color,t:0,r:6}); }
@@ -3807,27 +5152,49 @@ if (btnHomeCustomize){
     // small white orb; value stored for future scaling
     ents.pickups.push({ x, y, r:6, type:'xp', t:0, v:value });
   }
-  function openChest(ch, remoteDrops=null){
-    if(ch.opened) return;
-    ch.opened = true;
-    audio.chest();
-
-    // If remote gave us drops, use them; otherwise generate and broadcast
-    const drops = remoteDrops || (() => {
-      const n = rint(2,3);
-      const out = [];
-      const types = ['health','speed','shield','ammo'];
-      for(let i=0;i<n;i++){
+  // Loot table per chest rarity — better chests give more pickups, a bigger
+  // guaranteed essence payout, and a real shot at a bonus item.
+  const CHEST_LOOT_TABLE = {
+    common:    { n:[2,3], essence:[3,6],   bonusChance:0.00 },
+    rare:      { n:[3,4], essence:[6,10],  bonusChance:0.20 },
+    epic:      { n:[3,5], essence:[10,16], bonusChance:0.45 },
+    legendary: { n:[4,6], essence:[18,28], bonusChance:0.75 },
+  };
+  function rollChestDrops(ch){
+    const cfg = CHEST_LOOT_TABLE[ch.rarity] || CHEST_LOOT_TABLE.common;
+    const types = ['health','speed','shield','ammo'];
+    const out = [];
+    const n = rint(cfg.n[0], cfg.n[1]);
+    for(let i=0;i<n;i++){
       const a = rand(0, Math.PI*2);
       const d = rand(18,36);
       const type = types[rint(0, types.length-1)];
       out.push({ x: ch.x + Math.cos(a)*d, y: ch.y + Math.sin(a)*d, type });
-      }
-      return out;
-    })();
+    }
+    // Guaranteed essence pile, scaled by rarity, so better chests always feel worth it.
+    const ea = rand(0, Math.PI*2), ed = rand(10,20);
+    out.push({ x: ch.x + Math.cos(ea)*ed, y: ch.y + Math.sin(ea)*ed, type:'essence', value: rint(cfg.essence[0], cfg.essence[1]) });
+    // Rare+ chests have a real chance at one extra pickup on top.
+    if (rand(0,1) < cfg.bonusChance){
+      const a2 = rand(0, Math.PI*2), d2 = rand(20,40);
+      out.push({ x: ch.x + Math.cos(a2)*d2, y: ch.y + Math.sin(a2)*d2, type: types[rint(0,types.length-1)] });
+    }
+    return out;
+  }
+  function openChest(ch, remoteDrops=null){
+    if(ch.opened) return;
+    ch.opened = true;
+    audio.chest();
+    if (!ch.rarity) ch.rarity = 'common'; // safety net for older/remote chest objects
+
+    // If remote gave us drops, use them; otherwise generate and broadcast
+    const drops = remoteDrops || rollChestDrops(ch);
 
     // Spawn drops locally
-    for (const d of drops) dropPickup(d.x, d.y, d.type);
+    for (const d of drops) {
+      if (d.type === 'essence') dropXpOrb(d.x, d.y, d.value || 1);
+      else dropPickup(d.x, d.y, d.type);
+    }
 
     // Broadcast so nobody else can open the same chest
     if (!remoteDrops && isNetActive()) {
@@ -3836,7 +5203,7 @@ if (btnHomeCustomize){
       } catch {}
     }
     }
-  function respawnCollectedChests(){ const freeBuildings = []; for(let i=0;i<world.buildings.length;i++){ if(!world.buildings[i].hasChest) freeBuildings.push(i); } for(let i=0;i<world.chests.length;i++){ const ch = world.chests[i]; if(!ch.opened) continue; const prevIdx=ch.buildingIndex; world.buildings[prevIdx].hasChest=false; const candidates = freeBuildings.filter(idx=> idx!==prevIdx); if(candidates.length===0) continue; const newIdx = candidates[rint(0,candidates.length-1)]; freeBuildings.splice(freeBuildings.indexOf(newIdx),1); const b = world.buildings[newIdx]; const pad=28; let tries=0, cx, cy; do{ cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad); cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad); tries++; } while(tries<30 && world.collideHazard(cx,cy,16)); ch.x=cx; ch.y=cy; ch.r=16; ch.opened=false; ch.buildingIndex=newIdx; b.hasChest=true; } }
+  function respawnCollectedChests(){ const freeBuildings = []; for(let i=0;i<world.buildings.length;i++){ if(!world.buildings[i].hasChest) freeBuildings.push(i); } for(let i=0;i<world.chests.length;i++){ const ch = world.chests[i]; if(!ch.opened) continue; const prevIdx=ch.buildingIndex; world.buildings[prevIdx].hasChest=false; const candidates = freeBuildings.filter(idx=> idx!==prevIdx); if(candidates.length===0) continue; const newIdx = candidates[rint(0,candidates.length-1)]; freeBuildings.splice(freeBuildings.indexOf(newIdx),1); const b = world.buildings[newIdx]; const pad=28; let tries=0, cx, cy; do{ cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad); cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad); tries++; } while(tries<30 && world.collideHazard(cx,cy,16)); ch.x=cx; ch.y=cy; ch.r=16; ch.opened=false; ch.buildingIndex=newIdx; ch.rarity = rollChestRarity(currentTheme.id, state.wave||0); b.hasChest=true; } }
 
   // Waves & progressive difficulty -------------------------------------------
   let spawnQueue=[];
@@ -3850,6 +5217,175 @@ if (btnHomeCustomize){
     const t = (w - 1) / 14;
     return Math.round(min + (max - min) * t);
   }
+  // Picks `count` spawn points that are valid (not inside a wall/hazard) and
+  // spread well apart from each other, so player + bots don't all start
+  // clumped together. Backs off the required spacing if the map is too
+  // small/cluttered to fit everyone at the ideal distance.
+  function pickSpreadSpawnPoints(count) {
+    const margin = 140;
+    const valid = (x, y) => !world.isBlocked(x, y, 20) && !world.collideHazard(x, y, 20);
+    const tryFill = (pts, minDist, maxTries) => {
+      let tries = 0;
+      while (pts.length < count && tries < maxTries) {
+        tries++;
+        const x = rand(margin, world.w - margin);
+        const y = rand(margin, world.h - margin);
+        if (!valid(x, y)) continue;
+        let ok = true;
+        for (const p of pts) {
+          if (dist2(x, y, p.x, p.y) < minDist * minDist) { ok = false; break; }
+        }
+        if (ok) pts.push({ x, y });
+      }
+    };
+
+    const pts = [];
+    let minDist = Math.min(world.w, world.h) * 0.32;
+    tryFill(pts, minDist, 400);
+    // Relax the spacing requirement gradually if we couldn't fit everyone.
+    while (pts.length < count && minDist > 60) {
+      minDist *= 0.7;
+      tryFill(pts, minDist, 150);
+    }
+    // Last-resort fallback: just make sure everyone has a valid, non-blocked spot.
+    while (pts.length < count) {
+      let x, y, tries = 0;
+      do {
+        x = rand(margin, world.w - margin);
+        y = rand(margin, world.h - margin);
+        tries++;
+      } while (!valid(x, y) && tries < 200);
+      pts.push({ x, y });
+    }
+    return pts;
+  }
+
+  // ===== Death circle (practice PvP only) =====
+  function initZone(){
+    if (!window.PVP_MODE){ state.zone = null; return; }
+    const cx = world.w / 2, cy = world.h / 2;
+    // Big enough to fully cover the (doubled) arena's corners at t=0.
+    const startR = Math.hypot(world.w, world.h) / 2 + 80;
+    state.zone = {
+      cx, cy, r: startR,
+      fromX: cx, fromY: cy, fromR: startR,
+      toX: cx, toY: cy, toR: startR,
+      phase: 0, t: 0, mode: 'wait', nextPicked: false,
+      dps: ZONE_PHASES[0].dps
+    };
+  }
+
+  function updateZone(dt){
+    const z = state.zone;
+    if (!z) return;
+    const cfg = ZONE_PHASES[Math.min(z.phase, ZONE_PHASES.length - 1)];
+    z.t += dt;
+
+    if (z.mode === 'wait'){
+      if (!z.nextPicked){
+        // Pick the next circle right away so it can be previewed (dashed)
+        // for the whole calm phase, like a battle-royale storm telegraph.
+        const newR = Math.max(160, z.r * cfg.scale);
+        const maxOffset = Math.max(0, z.r - newR);
+        const ang = rand(0, Math.PI * 2);
+        const off = rand(0, maxOffset * 0.8);
+        z.toX = clamp(z.cx + Math.cos(ang) * off, newR + 60, world.w - newR - 60);
+        z.toY = clamp(z.cy + Math.sin(ang) * off, newR + 60, world.h - newR - 60);
+        z.toR = newR;
+        z.nextPicked = true;
+      }
+      if (z.t >= cfg.wait){
+        z.fromX = z.cx; z.fromY = z.cy; z.fromR = z.r;
+        z.mode = 'shrink';
+        z.t = 0;
+        z.dps = cfg.dps;
+      }
+    } else if (z.mode === 'shrink'){
+      const p = Math.min(1, z.t / cfg.shrink);
+      z.cx = lerp(z.fromX, z.toX, p);
+      z.cy = lerp(z.fromY, z.toY, p);
+      z.r  = lerp(z.fromR, z.toR, p);
+      if (p >= 1){
+        z.mode = 'wait';
+        z.t = 0;
+        z.nextPicked = false;
+        z.phase = Math.min(z.phase + 1, ZONE_PHASES.length - 1);
+      }
+    }
+
+    // ---- damage anyone caught outside the circle ----
+    const dps = z.dps || ZONE_PHASES[0].dps;
+    const outside = (ox, oy) => dist2(ox, oy, z.cx, z.cy) > z.r * z.r;
+
+    if (outside(player.x, player.y)) hurtPlayer(dps * dt);
+
+    if (window.BOTS_ENABLED && typeof SP_BOTS !== 'undefined'){
+      for (const b of SP_BOTS){
+        if (b.hp <= 0) continue;
+        if (outside(b.x, b.y)) b.hp -= dps * dt;
+      }
+    }
+  }
+
+  function drawZone(){
+    const z = state.zone;
+    if (!z || !window.PVP_MODE) return;
+    const cfg = ZONE_PHASES[Math.min(z.phase, ZONE_PHASES.length - 1)];
+
+    const scx = z.cx - cam.x - cam.sx;
+    const scy = z.cy - cam.y - cam.sy;
+
+    ctx.save();
+
+    // Danger tint outside the circle (evenodd: screen rect minus the circle)
+    ctx.beginPath();
+    ctx.rect(0, 0, VIEW.w, VIEW.h);
+    ctx.moveTo(scx + z.r, scy);
+    ctx.arc(scx, scy, Math.max(0, z.r), 0, Math.PI * 2, true);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(150, 20, 200, 0.16)';
+    ctx.fill('evenodd');
+
+    // Boundary ring
+    ctx.beginPath();
+    ctx.arc(scx, scy, Math.max(0, z.r), 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(214, 130, 255, 0.9)';
+    ctx.lineWidth = 4;
+    ctx.shadowColor = 'rgba(214, 130, 255, 0.75)';
+    ctx.shadowBlur = 16;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Preview of where the circle is heading next, while it's calm
+    if (z.mode === 'wait' && z.nextPicked && z.toR !== z.r){
+      const ncx = z.toX - cam.x - cam.sx;
+      const ncy = z.toY - cam.y - cam.sy;
+      ctx.setLineDash([10, 8]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.arc(ncx, ncy, Math.max(0, z.toR), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+
+    // Screen-space HUD label
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px system-ui, -apple-system, "Segoe UI", Roboto, Arial';
+    if (z.mode === 'shrink'){
+      ctx.fillStyle = 'rgba(255, 140, 220, 0.95)';
+      ctx.fillText('⚠ ZONE CLOSING', VIEW.w / 2, 34);
+    } else {
+      const secs = Math.max(0, Math.ceil(cfg.wait - z.t));
+      ctx.fillStyle = 'rgba(220, 190, 255, 0.9)';
+      ctx.fillText(`Zone closing in ${secs}s`, VIEW.w / 2, 34);
+    }
+    ctx.restore();
+  }
+
   function startWave(n) {
     // ✅ SINGLE‑PLAYER ONLY
     if (isNetActive()) return;
@@ -3994,6 +5530,7 @@ if (btnHomeCustomize){
         const sy = py0 + Math.sin(a) * player.r;
 
         // ✅ LOCAL VISUAL + GLYPH BULLET (REAL SYSTEM)
+        const isShard = isPath('water') && hasG('water','iceShards') && Math.random() < 0.25;
         ents.bullets.push({
           x: sx,
           y: sy,
@@ -4002,7 +5539,8 @@ if (btnHomeCustomize){
           r: 4,
           dmg: w.dmg,
           life: 1.1,
-          pierce: w.pierce ?? 0,
+          pierce: (w.pierce ?? 0) + (isShard ? 2 : 0),
+          shard: isShard,
           // ✅ IMPORTANT: DO NOT SET noGlyph
         });
 
@@ -4025,14 +5563,17 @@ if (btnHomeCustomize){
     // ✅ OFFLINE: local bullets
     for (let i = 0; i < w.shots; i++){
       const a = base + rand(-w.spread, w.spread);
-      spawnBullet(
+      // 💧 Ice Shards: occasional piercing shot
+      const isShard = isPath('water') && hasG('water','iceShards') && Math.random() < 0.25;
+      const bi = spawnBullet(
         px0 + Math.cos(a) * player.r,
         py0 + Math.sin(a) * player.r,
         a,
         w.speed,
         w.dmg,
-        w.pierce
+        (w.pierce ?? 0) + (isShard ? 2 : 0)
       );
+      if (isShard && bi) bi.shard = true;
     }
     addEffect(px0 + Math.cos(base) * player.r, py0 + Math.sin(base) * player.r, 'muzzle', 0.1, '#fff');
     noiseEvents.push({ x: px0, y: py0, r: 720, t: 1.2 });
@@ -4406,6 +5947,7 @@ let _glyphCost = 0;
 
 let _glyphRAF = 0;
 const _glyphParticles = [];
+let _glyphStars = null;
 
 // ---------- Scroll camera ----------
 const TREE_VIEW = { ox:0, oy:0, scale:1.0, dragging:false, lastX:0, lastY:0 };
@@ -4440,6 +5982,8 @@ function unlockNode(el,b,tier){
   const key = GLYPH_TREE_KEYS?.[el]?.[b]?.[tier-1];
   if (key && player.glyph && player.glyph[el]) {
     player.glyph[el][key] = true;
+    // ✅ sync to server so the bonus actually applies to real (multiplayer) combat
+    if (isNetActive()) Net.unlockGlyph(el, key);
   }
 
   // One-time stat bumps (safe, optional)
@@ -4920,6 +6464,8 @@ function onGlyphEnchant(){
   state.tier = Math.max(state.tier, 1);
   player.glyphPath = state.path;
   player.glyphTier = state.tier;
+  // ✅ sync to server so the bonus actually applies to real (multiplayer) combat
+  if (isNetActive()) Net.setGlyphPath(state.path);
   ensureTreeState(state.path);
 
   const glyphs = getGlyphLayout(cx, cy, 140);
@@ -4954,6 +6500,44 @@ function drawGlyphOverlay(){
   let orbitX = cx, orbitY = cy, orbitForce = 0.10;
   let activeEl = (state.path || _glyphSelected || (_ceremony && _ceremony.el) || 'lightning');
   const st = ELEM_STYLE[activeEl] || ELEM_STYLE.lightning;
+
+  // ✨ ambient backdrop: drifting starfield + slow nebula wash tinted to
+  // the active element, so the whole overlay feels alive even before you
+  // touch anything.
+  {
+    if (!_glyphStars) {
+      _glyphStars = [];
+      for (let i = 0; i < 90; i++){
+        _glyphStars.push({
+          a: Math.random()*Math.PI*2,
+          r: 40 + Math.random()*300,
+          sp: (Math.random()*0.4 + 0.05) * (Math.random()<0.5?-1:1),
+          sz: Math.random()*1.6 + 0.4,
+          tw: Math.random()*Math.PI*2
+        });
+      }
+    }
+    gctx.save();
+    const neb = gctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*0.6);
+    neb.addColorStop(0, rgba(st.main, 0.05));
+    neb.addColorStop(1, 'rgba(0,0,0,0)');
+    gctx.fillStyle = neb;
+    gctx.fillRect(0,0,W,H);
+
+    for (const s of _glyphStars){
+      const a = s.a + time*s.sp*0.15;
+      const x = cx + Math.cos(a)*s.r;
+      const y = cy + Math.sin(a)*s.r*0.62;
+      const tw = 0.35 + 0.35*Math.sin(time*1.5 + s.tw);
+      gctx.globalAlpha = tw;
+      gctx.fillStyle = '#eaf4ff';
+      gctx.beginPath();
+      gctx.arc(x, y, s.sz, 0, Math.PI*2);
+      gctx.fill();
+    }
+    gctx.globalAlpha = 1;
+    gctx.restore();
+  }
 
   if (_uiMode === 'ceremony' && _ceremony){
     const t = (performance.now() - _ceremony.t0) / _ceremony.dur;
@@ -5142,6 +6726,10 @@ function drawGlyphOverlay(){
     state.wave = 1;
     state.score = 0;
     state.playerExploded = false;
+    state.pvpGlyphT = 60;
+    state.pvpMatchClock = 0;
+    state.victoryShown = false;
+    state.zone = null;
     // ✅ reset glyph phase properly (prevents instant overlay close)
     state.phase = 'combat';
     state.phaseEndsAt = 0;
@@ -5163,6 +6751,13 @@ function drawGlyphOverlay(){
     // Rebuild map ONLY offline.
     // Online: server provides world via snapshot.world.
     if (!isNetActive()) {
+      // Practice PvP gets a much bigger arena — more room for 15+ bots to
+      // spread out, and somewhere for the death circle to shrink from.
+      world.w = window.PVP_MODE ? BASE_WORLD_W * 2 : BASE_WORLD_W;
+      world.h = window.PVP_MODE ? BASE_WORLD_H * 2 : BASE_WORLD_H;
+      player.x = world.w / 2;
+      player.y = world.h / 2;
+
       if (!window.Net || !Net.state || !Net.state.lobbyId) {
         world.buildObstacles();
         world.buildHazards();
@@ -5170,16 +6765,40 @@ function drawGlyphOverlay(){
       }
       nav.rebuild();
 
+      // ✅ When bots are in play (co-op or practice PvP), spread everyone's
+      // starting position out across the map instead of clumping player +
+      // bots together in the dead center — otherwise every bot effectively
+      // starts already knowing exactly where the others are.
+      // Co-op keeps the original 3-bot squad; practice PvP fields a full
+      // 15-bot battle royale.
+      const botCount = window.BOTS_ENABLED ? (window.PVP_MODE ? 15 : 3) : 0;
+      state.pvpBotsTotal = window.PVP_MODE ? botCount : 0;
+
+      window._botSpawnPoints = null;
+      if (window.BOTS_ENABLED) {
+        const spots = pickSpreadSpawnPoints(botCount + 1); // 1 player + bots
+        player.x = spots[0].x;
+        player.y = spots[0].y;
+        window._botSpawnPoints = spots.slice(1);
+      }
+
       const c0 = nav.cellFrom(player.x, player.y);
       nav.floodFrom(c0.ix, c0.iy);
 
-      startWave(1);
+      // ✅ Practice PvP has no PvE monster waves — bots (and the death
+      // circle) are the opposition.
+      if (!window.PVP_MODE) {
+        startWave(1);
+      } else {
+        initZone();
+      }
     }
 
 
     // 👇 IMPORTANT: actually start the simulation
     ovHome.style.display = 'none';
     ovPause.style.display = 'none';
+    if (ovVictory) ovVictory.style.display = 'none';
     state.running = true;  
     // ✅ reset PvE leaderboard
     for (const k in pveLeaderboard) delete pveLeaderboard[k];
@@ -5188,9 +6807,23 @@ function drawGlyphOverlay(){
     updateHudButtonsForMode();                // ← lets update() run
     if (audio.musicOn) audio.startMusic();
     canvas.focus();
-    initSPBots(player, COLORS, DESIGNS, gunSheets);
-    setBotLOS(losBlocked);
-    setBotMove(moveWithCollide);
+    if (window.BOTS_ENABLED) {
+      initSPBots(player, COLORS, DESIGNS, gunSheets, window._botSpawnPoints);
+      // Hand the bot AI everything it needs that would otherwise be trapped
+      // inside this IIFE (world geometry, hazard physics, dash math, glyph
+      // helpers, chest opening, RNG utilities...).
+      setBotEnv({
+        world, ents, weapons, player, cam, audio,
+        losBlocked, moveWithCollide,
+        applyQuicksand, applyIceSlide, resolveVoid,
+        openChest, applyBurn, applyDrench, stun,
+        addEffect, spawnDashTrail, sweptDashDistance,
+        dropXpOrb, dropPickup,
+        dist2, clamp, rand, rint, pointInRect
+      });
+    } else {
+      SP_BOTS = [];
+    }
   }
   function applyTheme(theme){ currentTheme=theme; state.diff=parseFloat(selDiff.value||'1.0')||1.0; lvlEl.textContent=`${currentTheme.id} — ${currentTheme.name}` 
     if (!window.Net || !Net.state || !Net.state.lobbyId) {
@@ -5217,7 +6850,7 @@ function drawGlyphOverlay(){
     }
   }
   // Build home cards ----------------------------------------------------------
-  function createLevelPreview(theme){ const cnv=document.createElement('canvas'); cnv.width=260; cnv.height=130; const c=cnv.getContext('2d'); const g=c.createLinearGradient(0,0,0,cnv.height); g.addColorStop(0,theme.floor.c1); g.addColorStop(1,theme.floor.c2); c.fillStyle=g; c.fillRect(0,0,cnv.width,cnv.height); c.strokeStyle=theme.floor.grid; c.lineWidth=1; c.beginPath(); for(let x=0;x<cnv.width;x+=20){ c.moveTo(x,0); c.lineTo(x,cnv.height); } for(let y=0;y<cnv.height;y+=20){ c.moveTo(0,y); c.lineTo(cnv.width,y); } c.stroke(); const rects=[{x:20,y:22,w:70,h:18},{x:120,y:46,w:50,h:26},{x:190,y:26,w:50,h:22},{x:60,y:82,w:120,h:20}]; for(const o of rects){ c.fillStyle=theme.obs.fill; c.strokeStyle=theme.obs.stroke; c.lineWidth=2; roundRect(c,o.x,o.y,o.w,o.h,8); c.fill(); c.stroke(); } if(theme.hazards.kind!=='none'){ c.fillStyle= theme.hazards.kind==='lava'?'#ff6a2a': theme.hazards.kind==='chasm'?'#08101a': theme.hazards.kind==='void'?'#09060c':'#4a3a2a'; c.fillRect(160,22,70,30); c.strokeStyle=theme.accent+'66'; c.strokeRect(160,22,70,30); } c.fillStyle = '#fff'; c.beginPath(); c.arc(200,70, 14, 0, Math.PI*2); c.fill(); return cnv; }
+  function createLevelPreview(theme){ const cnv=document.createElement('canvas'); cnv.width=260; cnv.height=130; const c=cnv.getContext('2d'); const g=c.createLinearGradient(0,0,0,cnv.height); g.addColorStop(0,theme.floor.c1); g.addColorStop(1,theme.floor.c2); c.fillStyle=g; c.fillRect(0,0,cnv.width,cnv.height); c.strokeStyle=theme.floor.grid; c.lineWidth=1; c.beginPath(); for(let x=0;x<cnv.width;x+=20){ c.moveTo(x,0); c.lineTo(x,cnv.height); } for(let y=0;y<cnv.height;y+=20){ c.moveTo(0,y); c.lineTo(cnv.width,y); } c.stroke(); try{ const bgTile=getThemeTile(theme); if(bgTile&&bgTile.width){ c.fillStyle=c.createPattern(bgTile,'repeat'); c.fillRect(0,0,cnv.width,cnv.height); } }catch(e){} const rects=[{x:20,y:22,w:70,h:18},{x:120,y:46,w:50,h:26},{x:190,y:26,w:50,h:22},{x:60,y:82,w:120,h:20}]; for(const o of rects){ c.fillStyle=theme.obs.fill; c.strokeStyle=theme.obs.stroke; c.lineWidth=2; roundRect(c,o.x,o.y,o.w,o.h,8); c.fill(); c.stroke(); } if(theme.hazards.kind!=='none'){ c.fillStyle= theme.hazards.kind==='lava'?'#ff6a2a': theme.hazards.kind==='chasm'?'#08101a': theme.hazards.kind==='void'?'#09060c':'#4a3a2a'; c.fillRect(160,22,70,30); c.strokeStyle=theme.accent+'66'; c.strokeRect(160,22,70,30); } c.fillStyle = '#fff'; c.beginPath(); c.arc(200,70, 14, 0, Math.PI*2); c.fill(); return cnv; }
   
   function buildHome(){
     const grid = document.getElementById('levelsGrid');
@@ -5227,6 +6860,7 @@ function drawGlyphOverlay(){
     LEVELS.forEach(theme => { 
     const card=document.createElement('div') 
     card.className='levelCard' 
+    card.dataset.level = theme.id 
     const prev=document.createElement('div') 
     prev.className='levelPreview' 
     const prevCanvas=createLevelPreview(theme) 
@@ -5801,6 +7435,9 @@ window.addEventListener('net:snapshot', (ev) => {
     // AFTER dx / dy are computed and normalized
     moveWithCollide(player, dx * speed * dt, dy * speed * dt);
     tickWisps(dt); // ✅ WISPS UPDATE (ANCHOR TO PLAYER)
+    tickGuardianSpirits(dt); // ✅ WISPS INTERCEPT ENEMY SHOTS
+    tickBallLightning(dt); // ✅ BALL LIGHTNING UPDATE (ANCHOR TO PLAYER)
+    tickGolem(dt); // ✅ GOLEM SUMMON (FOLLOWS + PULLS ENEMIES)
 
     if (online) {
       Net.sendInput(dx, dy, player.angle, player.x, player.y, player.weapon);
@@ -5889,10 +7526,41 @@ window.addEventListener('net:snapshot', (ev) => {
 
           melee._hitSet.add(idKey);
         }
+
+        // ✅ Melee also needs to be able to hit bots (practice PvP) — the
+        // loop above only ever iterated ents.enemies/snapshot enemies, so
+        // melee swings silently passed straight through bots.
+        if (window.BOTS_ENABLED && window.PVP_MODE && typeof SP_BOTS !== 'undefined'){
+          for (const bot of SP_BOTS){
+            if (bot.hp <= 0) continue;
+            if (melee._hitSet.has(bot.id)) continue;
+
+            const dx = bot.x - player.x;
+            const dy = bot.y - player.y;
+            const dist = Math.hypot(dx, dy);
+            const br = bot.r ?? 16;
+
+            if (dist > RANGE + br) continue;
+
+            const dir = Math.atan2(dy, dx);
+            const diff = Math.abs(((dir - ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            if (diff > ARC / 2) continue;
+
+            addEffect(bot.x, bot.y, 'hit', 0.15, '#fff');
+            cam.shake = Math.max(cam.shake, 2);
+
+            const mult = onHitGlyph(bot, DMG, 'melee');
+            bot.hp -= DMG * mult * botEarthDamageMul(bot);
+
+            melee._hitSet.add(bot.id);
+          }
+        }
       }
     }
     // --- Single‑player spawning only ---
-    if (!online) {
+    // ✅ Practice PvP (bots vs player) has no PvE monster waves at all —
+    // skip wave spawning + the glyph-phase overlay entirely in that mode.
+    if (!online && !window.PVP_MODE) {
       state.spawnT += dt;
 
       if (state.spawnIdx == null) state.spawnIdx = 0;
@@ -5947,7 +7615,34 @@ window.addEventListener('net:snapshot', (ev) => {
         }
       }
     }
-    
+
+    // --- Practice PvP glyph window ---
+    // No PvE waves to gate glyph upgrades in PvP, so instead give the
+    // player (and, ambiently, the bots — who already level up on their own
+    // independent timer) a recurring ~60s window to pick a glyph upgrade.
+    if (!online && window.PVP_MODE) {
+      if (state.phase !== 'glyph') {
+        state.pvpGlyphT -= dt;
+        if (state.pvpGlyphT <= 0) {
+          state.phase = 'glyph';
+          state.phaseEndsAt = performance.now() + 15000;
+          openGlyphOverlay(15);
+        }
+      } else {
+        // countdown display while the picker is open
+        const remaining = Math.max(0, state.phaseEndsAt - performance.now());
+        if (glyphTimerEl) glyphTimerEl.textContent = String(Math.ceil(remaining/1000));
+        if (glyphEssenceEl) glyphEssenceEl.textContent = String(state.essence);
+
+        if (remaining <= 0 && _uiMode !== 'ceremony') {
+          closeGlyphOverlay();
+          state.phase = 'combat';
+          state.phaseEndsAt = 0;
+          state.pvpGlyphT = 60; // start the countdown to the next window
+        }
+      }
+    }
+
     if (melee) Melee.update(melee, dt);
     // --- Single‑player enemy updates only ---
     if (true) {
@@ -6000,7 +7695,7 @@ window.addEventListener('net:snapshot', (ev) => {
           hurtPlayer(dmg * dt * 1.4);
 
           // ===== ALSO DAMAGE BOTS IF TOUCHING =====
-          if (typeof SP_BOTS !== "undefined"){
+          if (window.BOTS_ENABLED && typeof SP_BOTS !== "undefined"){
             for (const bot of SP_BOTS){
 
               const d2b = dist2(e.x, e.y, bot.x, bot.y);
@@ -6222,7 +7917,32 @@ window.addEventListener('net:snapshot', (ev) => {
      // 🌊 Tidal Wave hit counter
      // 🌊 Tidal Wave hit counter (OFFLINE)
     
-      cam.shake = Math.max(cam.shake,1.5); if (b.pierce > 0) b.pierce--; else ents.bullets.splice(i,1); e.alerted = true; e.alertT = Math.max(e.alertT, 3); broadcastAlertFrom(e.x,e.y); } }
+      cam.shake = Math.max(cam.shake,1.5); if (b.pierce > 0) b.pierce--; else ents.bullets.splice(i,1); e.alerted = true; e.alertT = Math.max(e.alertT, 3); broadcastAlertFrom(e.x,e.y); }
+      else if (window.BOTS_ENABLED && window.PVP_MODE && typeof SP_BOTS !== 'undefined') {
+        // ✅ Player bullets (incl. spirit wisp shots) can now also hit bots in
+        // practice PvP. This loop previously only ever tested against
+        // ents.enemies, so shots — and melee, separately — simply passed
+        // through bots with no effect.
+        for (let j = 0; j < SP_BOTS.length; j++) {
+          const bot = SP_BOTS[j];
+          if (bot.hp <= 0) continue;
+          const rr = (bot.r || 16) + b.r;
+          if (dist2(b.x, b.y, bot.x, bot.y) < rr * rr) {
+            let dmg = b.dmg;
+            if (!b.noGlyph) {
+              const mult = onHitGlyph(bot, dmg, 'bullet');
+              dmg *= mult;
+            }
+            dmg *= botEarthDamageMul(bot);
+            bot.hp -= dmg;
+            addEffect(b.x, b.y, 'hit', 0.15, '#fff');
+            cam.shake = Math.max(cam.shake, 1.5);
+            if (b.pierce > 0) b.pierce--; else ents.bullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
 
     for (let i = ents.ebullets.length - 1; i >= 0; i--){ const b = ents.ebullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; if (b.kind === 'bomb'){ const hitWall = lineWallHit(b.x, b.y, b.vx, b.vy, 0, b.r); const timeUp=(b.life<=0); if (hitWall || timeUp){ const R=(b.splashR||110)+player.r 
       if(dist2(b.x,b.y,player.x,player.y) < R*R){
@@ -6231,62 +7951,58 @@ window.addEventListener('net:snapshot', (ev) => {
       }
 
       // DAMAGE BOTS FROM SPLASH
-      for (const bot of SP_BOTS){
+      if (window.BOTS_ENABLED) for (const bot of SP_BOTS){
         if (dist2(b.x,b.y,bot.x,bot.y) < R*R){
           bot.hp -= b.dmg || 10;
         }
       }
       addEffect(b.x,b.y,'pop',0.55,'#ffb38a'); cam.shake=Math.max(cam.shake,5); ents.ebullets.splice(i, 1); continue; } continue; } if (lineWallHit(b.x,b.y,b.vy,b.vx,0,b.r) || b.life <= 0){ ents.ebullets.splice(i,1); continue; } 
       // ===== HIT PLAYER =====
-      const r = player.r + b.r; 
+      // Real monster bullets (no b.fromBot) can always hit the player, same
+      // as before. Bot-fired bullets only hurt the player in PvP practice
+      // mode — in co-op, bots are the player's allies against the monsters.
+      const r = player.r + b.r;
+      const bulletIsHostileToPlayer = !b.fromBot || window.PVP_MODE;
 
-      if (dist2(b.x,b.y,player.x,player.y) < r*r){ 
-        if (currentTheme.id === 3) player.slowT = Math.max(player.slowT, 1.6); 
-        hurtPlayer(b.dmg); 
-        addEffect(b.x,b.y,'hit',0.1,'#ffd7d7'); 
-        ents.ebullets.splice(i,1); 
+      if (bulletIsHostileToPlayer && dist2(b.x,b.y,player.x,player.y) < r*r){
+        if (currentTheme.id === 3) player.slowT = Math.max(player.slowT, 1.6);
+        if (b.fromBot && b.glyph) applyBotGlyphOnHostileHit(b.ownerRef, player, b.dmg);
+        hurtPlayer(b.dmg);
+        addEffect(b.x,b.y,'hit',0.1, b.glyphColor || '#ffd7d7');
+        ents.ebullets.splice(i,1);
         continue;
       }
-      // ===== HIT BOTS =====
-      if (window.PVP_MODE){
 
+      // ===== HIT BOTS =====
+      // Monster bullets are hostile to every bot. Bot-fired bullets are
+      // only hostile to bots on a *different* team (this also naturally
+      // prevents friendly fire in co-op, where every bot shares team 0).
+      if (window.BOTS_ENABLED){
+        let hitBot = false;
         for (const bot of SP_BOTS){
+          if (bot.hp <= 0) continue;
+          if (b.fromBot && (bot.id === b.fromBot || bot.team === b.team)) continue;
 
           const rr = bot.r + b.r;
-
           if (dist2(b.x,b.y,bot.x,bot.y) < rr*rr){
+            let dmg = b.dmg || 10;
+            dmg *= botEarthDamageMul(bot);
+            if (b.fromBot && b.glyph) applyBotGlyphOnHostileHit(b.ownerRef, bot, dmg);
+            bot.hp -= dmg;
 
-            bot.hp -= b.dmg || 10;
+            const dx = bot.x - b.x, dy = bot.y - b.y;
+            const len = Math.hypot(dx, dy) || 1;
+            bot.x += (dx / len) * 8;
+            bot.y += (dy / len) * 8;
 
-            ents.bullets.splice(i,1);
+            addEffect(b.x,b.y,'hit',0.1, b.glyphColor || '#ffd7d7');
+            ents.ebullets.splice(i,1);
+            hitBot = true;
             break;
           }
         }
+        if (hitBot) continue;
       }
-
-      // ===== HIT BOTS =====
-      for (const bot of SP_BOTS){
-
-        const rr = bot.r + b.r;
-
-        if (dist2(b.x,b.y,bot.x,bot.y) < rr * rr){
-
-          // apply damage
-          bot.hp -= b.dmg || 10;
-
-          // small knockback (optional but helps feel)
-          const dx = bot.x - b.x;
-          const dy = bot.y - b.y;
-          const len = Math.hypot(dx, dy) || 1;
-          bot.x += (dx / len) * 8;
-          bot.y += (dy / len) * 8;
-
-          addEffect(b.x,b.y,'hit',0.1,'#ffd7d7');
-
-          ents.ebullets.splice(i,1);
-          break;
-        }
-      } 
     }
       for (let i = ents.pickups.length - 1; i >= 0; i--){
         const p = ents.pickups[i];
@@ -6363,7 +8079,8 @@ window.addEventListener('net:snapshot', (ev) => {
 
                 // spawn drops immediately
                 for (const d of (ch.drops || [])) {
-                  dropPickup(d.x, d.y, d.type);
+                  if (d.type === 'essence') dropXpOrb(d.x, d.y, d.value || 1);
+                  else dropPickup(d.x, d.y, d.type);
                 }
                 audio.chest();
               }
@@ -6550,6 +8267,18 @@ window.addEventListener('net:snapshot', (ev) => {
     }
   }
   updateWorldVfx(dt);
+  if (!HAS_SERVER_WORLD) world.updateHazards(dt);
+
+  // 🌋 Camera shake when a lava pit erupts, scaled by distance to the player
+  for (const hz of world.hazards){
+    if (hz.type === 'lava' && hz._justErupted){
+      hz._justErupted = false;
+      const hcx = hz.x + hz.w/2, hcy = hz.y + hz.h/2;
+      const d = Math.hypot(player.x - hcx, player.y - hcy);
+      const falloff = Math.max(0, 1 - d / 900);
+      if (falloff > 0) cam.shake = Math.max(cam.shake, 14 * falloff);
+    }
+  }
 
     {
       const hz = world.getHazardAt(player.x, player.y, player.r * 0.9);
@@ -6626,6 +8355,18 @@ window.addEventListener('net:snapshot', (ev) => {
       localStorage.setItem('arenaBest', String(best));
       bestEl.textContent = best;
       showGameOver();
+    } else if (!online && window.PVP_MODE){
+      // ===== Practice PvP: death circle + last-bot-standing victory =====
+      updateZone(dt);
+      state.pvpMatchClock += dt;
+
+      if (!state.victoryShown && window.BOTS_ENABLED &&
+          typeof SP_BOTS !== 'undefined' && state.pvpBotsTotal > 0 &&
+          SP_BOTS.every(b => b.hp <= 0)){
+        state.victoryShown = true;
+        state.running = false;
+        showVictory();
+      }
     }
     // 🌊 Water: TIDAL WAVE — periodic cone knockback
     if (
@@ -6654,11 +8395,27 @@ window.addEventListener('net:snapshot', (ev) => {
       player._quakeCD = (player._quakeCD ?? 0) - dt;
       if (player._quakeCD <= 0){
         player._quakeCD = 3.2;
-        aoeDamage(player.x, player.y, 120, 10, { col:'#7dffa3', stun:0.35 });
+        aoeDamage(player.x, player.y, 120, 10, { col:'#7dffa3', stun:0.35, kind:'earth' });
         addWorldVfx({ type:'quake', x: player.x, y: player.y, r: 160, life: 0.45, maxLife: 0.45 });
       }
     }
-    updateSPBots(dt, player, ents, world, weapons);
+    // 🪨 Earth: Stone Pillar (temporary wall — blocks enemies & shots)
+    if (isPath('earth') && hasG('earth','stonePillar')){
+      player._pillarCD = (player._pillarCD ?? 0) - dt;
+      if (player._pillarCD <= 0){
+        player._pillarCD = 6.0;
+        const ax = Math.cos(player.angle), ay = Math.sin(player.angle);
+        addWorldVfx({
+          type: 'stonePillar',
+          x: player.x + ax*70,
+          y: player.y + ay*70,
+          r: 30,
+          life: 6.0,
+          maxLife: 6.0
+        });
+      }
+    }
+    updateSPBots(dt, player, ents, world, weapons, state.zone);
   }
   
   const SPRITE_ROT_OFF = {
@@ -6690,7 +8447,7 @@ window.addEventListener('net:snapshot', (ev) => {
       ? snap.bots
       : SP_BOTS;
     
-    drawSPBots(ctx, cam, COLORS, drawDesign, weapons, gunSheets);
+    if (window.BOTS_ENABLED) drawSPBots(ctx, cam, COLORS, drawDesign, weapons, gunSheets);
     // World layers
     // Floor does not need 60Hz redraw
    
@@ -6702,6 +8459,8 @@ window.addEventListener('net:snapshot', (ev) => {
       if (!isNetActive() || HAS_SERVER_WORLD) {
         world.drawObstacles(); // ✅ always redraw on top of floor
       }
+
+      drawZone();
 
 
 
@@ -6868,14 +8627,32 @@ window.addEventListener('net:snapshot', (ev) => {
     // ✅ OFFLINE: draw local player bullets
     if (!online) {
       for (const b of ents.bullets) {
+        const bx = b.x - cam.x - cam.sx;
+        const by = b.y - cam.y - cam.sy;
+
+        if (b.shard){
+          // 💧 Ice Shards: distinct icy glow + crystal trail
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const g = ctx.createRadialGradient(bx,by,0,bx,by,10);
+          g.addColorStop(0,'rgba(210,245,255,0.95)');
+          g.addColorStop(1,'rgba(120,210,255,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(bx, by, 10, 0, Math.PI*2);
+          ctx.fill();
+          ctx.restore();
+
+          ctx.fillStyle = '#eafcff';
+          ctx.beginPath();
+          ctx.arc(bx, by, (b.r ?? 4)*1.1, 0, Math.PI*2);
+          ctx.fill();
+          continue;
+        }
+
+        ctx.fillStyle = '#cfe5ff';
         ctx.beginPath();
-        ctx.arc(
-          b.x - cam.x - cam.sx,
-          b.y - cam.y - cam.sy,
-          b.r ?? 4,
-          0,
-          Math.PI * 2
-        );
+        ctx.arc(bx, by, b.r ?? 4, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -7086,10 +8863,12 @@ window.addEventListener('net:snapshot', (ev) => {
     // ===========================
     ctx.fillStyle = '#ffadad';
 
-    // ✅ OFFLINE: enemy bullets
+    // ✅ OFFLINE: enemy bullets (bot-fired shots are tagged with glyphColor
+    // so they read as elemental rather than plain monster fire)
     if (!online) {
       for (const b of ents.ebullets) {
         const rad = b.kind === 'bomb' ? 7 : (b.r ?? 4);
+        ctx.fillStyle = b.glyphColor || '#ffadad';
         ctx.beginPath();
         ctx.arc(
           b.x - cam.x - cam.sx,
@@ -7100,6 +8879,7 @@ window.addEventListener('net:snapshot', (ev) => {
         );
         ctx.fill();
       }
+      ctx.fillStyle = '#ffadad';
     }
 
     // ✅ ONLINE: draw RAW enemy bullets in magenta (debug), then smoothed in normal colour
@@ -7252,6 +9032,16 @@ window.addEventListener('net:snapshot', (ev) => {
         ctx.stroke();
       }
     }
+
+    // 🔗 Soul Bind tether — drawn once between the two linked enemies (not per-enemy)
+    if (isPath('spirit') && hasG('spirit','soulBind') && player._linkA && player._linkB && player._linkA.hp > 0 && player._linkB.hp > 0){
+      drawSoulBindTether(
+        ctx,
+        player._linkA.x - cam.x - cam.sx, player._linkA.y - cam.y - cam.sy,
+        player._linkB.x - cam.x - cam.sx, player._linkB.y - cam.y - cam.sy,
+        t
+      );
+    }
     // ============================
     // BOTS ✅ CORRECT PLACE
     // ============================
@@ -7320,7 +9110,7 @@ window.addEventListener('net:snapshot', (ev) => {
           );
         }
       }
-      drawSPBots(ctx, cam, COLORS, drawDesign, weapons, gunSheets);
+      if (window.BOTS_ENABLED) drawSPBots(ctx, cam, COLORS, drawDesign, weapons, gunSheets);
       ctx.restore();
     }
 
@@ -7485,6 +9275,7 @@ window.addEventListener('net:snapshot', (ev) => {
         player.r
       );
       drawGlyphVisuals(ctx, player, px, py, t);
+      drawEarthPlayerVFX(ctx, px, py, player.r, t);
 
       const w = weapons[player.weapon];
       const showMelee = (equip === 'melee') || (melee && melee.state === 'using');
@@ -7539,18 +9330,88 @@ window.addEventListener('net:snapshot', (ev) => {
         ctx.fill();
       }
       else if (e.type === 'hit') {
-        ctx.strokeStyle = e.color;
+        const p = e.t / e.life;
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        // small flash core
+        ctx.globalAlpha = 0.9 * (1 - p);
+        const g = ctx.createRadialGradient(ex,ey,0,ex,ey,10*(1-p*0.4));
+        g.addColorStop(0, withAlpha(e.color,'ee'));
+        g.addColorStop(1, withAlpha(e.color,'00'));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(ex, ey, 10*(1-p*0.4), 0, Math.PI*2); ctx.fill();
+        // expanding ring
+        ctx.globalAlpha = 0.8 * (1 - p);
+        ctx.strokeStyle = e.color || '#fff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(ex, ey, 10 * (1 - e.t / e.life), 0, Math.PI * 2);
+        ctx.arc(ex, ey, 10 * p + 3, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
       }
       else if (e.type === 'pop') {
-        ctx.strokeStyle = e.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(ex, ey, 20 * (e.t / e.life), 0, Math.PI * 2);
-        ctx.stroke();
+        const p = e.t / e.life;
+        drawShockRing(ctx, ex, ey, 20 * p, 0.7 * (1 - p), e.color || '#fff');
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = 0.5 * (1 - p);
+        ctx.strokeStyle = e.color || '#fff';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const len = 20 * p;
+          ctx.beginPath();
+          ctx.moveTo(ex + Math.cos(a) * len * 0.4, ey + Math.sin(a) * len * 0.4);
+          ctx.lineTo(ex + Math.cos(a) * len, ey + Math.sin(a) * len);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      else if (e.type === 'elemBurst') {
+        const p = Math.min(1, e.t / e.life);
+        const kx = ex, ky = ey;
+        if (e.kind === 'fire') drawFireExplosion(ctx, kx, ky, e.r, p, t);
+        else if (e.kind === 'lightning') { drawShockRing(ctx, kx, ky, e.r*p, 0.7*(1-p), '#bfefff'); for(let i=0;i<5;i++){ const a=Math.random()*Math.PI*2; drawLightningBolt(ctx, kx, ky, kx+Math.cos(a)*e.r*p, ky+Math.sin(a)*e.r*p, '#9fe3ff', 0.6*(1-p), 2, false); } }
+        else if (e.kind === 'water') drawWaterSplash(ctx, kx, ky, e.r, p, t);
+        else if (e.kind === 'earth') drawEarthBurst(ctx, kx, ky, e.r, p, t);
+        else if (e.kind === 'spirit') { drawGlowOrb(ctx, kx, ky, e.r*(0.4+p*0.6), '#c066ff', 0.7*(1-p)); drawSpectralTrail(ctx, kx, ky, e.r*p, t, '#c98bff'); }
+        else drawShockRing(ctx, kx, ky, e.r*p, 0.7*(1-p), '#fff');
+      }
+      else if (e.type === 'boltStrike') {
+        const p = e.t / e.life;
+        const x1 = e.x1 - cam.x - cam.sx, y1 = e.y1 - cam.y - cam.sy;
+        const x2 = e.x2 - cam.x - cam.sx, y2 = e.y2 - cam.y - cam.sy;
+        drawLightningDischarge(ctx, x1, y1, x2, y2, Math.max(0, 1 - p*1.4));
+      }
+      else if (e.type === 'dashTrail') {
+        const p = e.t / e.life;
+        const fade = Math.max(0, 1 - p);
+        const x1 = e.x1 - cam.x - cam.sx, y1 = e.y1 - cam.y - cam.sy;
+        const x2 = e.x2 - cam.x - cam.sx, y2 = e.y2 - cam.y - cam.sy;
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.lineCap = 'round';
+        // soft outer glow
+        ctx.strokeStyle = e.col;
+        ctx.globalAlpha = 0.28 * fade;
+        ctx.lineWidth = 24 * fade + 6;
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+        // mid neon band
+        ctx.globalAlpha = 0.55 * fade;
+        ctx.lineWidth = 9 * fade + 2.5;
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+        // white-hot core
+        ctx.strokeStyle = '#ffffff';
+        ctx.globalAlpha = 0.85 * fade;
+        ctx.lineWidth = 2.5 * fade + 1;
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+        ctx.restore();
+      }
+      else if (e.type === 'dashGhost') {
+        const p = e.t / e.life;
+        const fade = Math.max(0, 1 - p);
+        const gx = e.x - cam.x - cam.sx, gy = e.y - cam.y - cam.sy;
+        drawGlowOrb(ctx, gx, gy, e.r, e.col, fade * 0.8);
       }
       else if (e.type === 'dreadBloom'){
         const x = e.x - cam.x;
@@ -7659,8 +9520,8 @@ window.addEventListener('net:snapshot', (ev) => {
         const r = Math.max(6, e.r * (0.85 + 0.15 * Math.sin(e.t * 4)));
 
         const g = ctx.createRadialGradient(ex, ey, r * 0.2, ex, ey, r);
-        g.addColorStop(0, (e.color ?? '#fff') + '44');
-        g.addColorStop(0.6, (e.color ?? '#fff') + '22');
+        g.addColorStop(0, withAlpha(e.color,'44'));
+        g.addColorStop(0.6, withAlpha(e.color,'22'));
         g.addColorStop(1, '#0000');
 
         ctx.globalAlpha = a;
@@ -7804,6 +9665,72 @@ window.addEventListener('net:snapshot', (ev) => {
       ctx.restore();
     }
 
+    // === BALL LIGHTNING (orbiting electric orb) ===
+    for (const b of ents.balls){
+      const x = b.x - cam.x - cam.sx;
+      const y = b.y - cam.y - cam.sy;
+      const t = performance.now()/1000;
+
+      ctx.save();
+      drawSoftShadow(ctx, x, y + 8, 12, 7, 0.3);
+
+      // crackling core orb
+      drawGlowOrb(ctx, x, y, 12, '#9fe3ff', 0.9 + 0.2*Math.sin(t*9));
+      drawEnergySpikes(ctx, x, y, 14, 6, '#cdf3ff', t);
+
+      ctx.fillStyle = '#eaf9ff';
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI*2);
+      ctx.fill();
+
+      // arc to whatever it's currently zapping
+      if (b.zapT > 0){
+        const tx = b.targetX - cam.x - cam.sx;
+        const ty = b.targetY - cam.y - cam.sy;
+        ctx.strokeStyle = 'rgba(160,230,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        const midx = (x+tx)/2 + (Math.random()-0.5)*14;
+        const midy = (y+ty)/2 + (Math.random()-0.5)*14;
+        ctx.quadraticCurveTo(midx, midy, tx, ty);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // === GOLEM (summoned earth ally) ===
+    if (ents.golem){
+      const g = ents.golem;
+      const x = g.x - cam.x - cam.sx;
+      const y = g.y - cam.y - cam.sy;
+      const t = performance.now()/1000;
+
+      ctx.save();
+      drawSoftShadow(ctx, x, y + 14, 26, 14, 0.4);
+
+      // rocky glowing body
+      const g2 = ctx.createRadialGradient(x,y,4,x,y,g.r);
+      g2.addColorStop(0, '#bfffcf');
+      g2.addColorStop(0.6, '#4fae66');
+      g2.addColorStop(1, '#274d30');
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.arc(x, y, g.r, 0, Math.PI*2);
+      ctx.fill();
+
+      drawGlowOrb(ctx, x, y, g.r*0.7, '#7dffa3', 0.5 + 0.15*Math.sin(t*3));
+
+      ctx.strokeStyle = 'rgba(125,255,163,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, g.r + 4, 0, Math.PI*2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
     // ---------------------------
     // Chests, minimap, HUD
     // ---------------------------
@@ -7914,6 +9841,26 @@ window.addEventListener('net:snapshot', (ev) => {
       for (const p of snap.players){
         if (!p || p.id === Net.state.peerId) continue;
         mctx.fillRect(tx(p.x) - 3, ty(p.y) - 3, 6, 6);
+      }
+    }
+
+    // Death circle (practice PvP)
+    if (state.zone && window.PVP_MODE){
+      const z = state.zone;
+      mctx.beginPath();
+      mctx.arc(tx(z.cx), ty(z.cy), Math.max(1, z.r * scale), 0, Math.PI * 2);
+      mctx.strokeStyle = 'rgba(214,130,255,0.9)';
+      mctx.lineWidth = 2;
+      mctx.stroke();
+
+      if (z.mode === 'wait' && z.nextPicked && z.toR !== z.r){
+        mctx.beginPath();
+        mctx.arc(tx(z.toX), ty(z.toY), Math.max(1, z.toR * scale), 0, Math.PI * 2);
+        mctx.setLineDash([4, 3]);
+        mctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        mctx.lineWidth = 1.5;
+        mctx.stroke();
+        mctx.setLineDash([]);
       }
     }
 
@@ -8133,6 +10080,15 @@ window.addEventListener('net:snapshot', (ev) => {
       left *= (1 - armour);
     }
 
+    // 🪨 Spiked Barrier: getting hit fires 3 rock spikes outward
+    if (isPath('earth') && hasG('earth','spikedBarrier') && dmg > 0){
+      for (let i = 0; i < 3; i++){
+        const a = Math.random()*Math.PI*2;
+        spawnBullet(player.x, player.y, a, 460, 12, 0);
+      }
+      addEffect(player.x, player.y, 'pop', 0.3, '#7dffa3');
+    }
+
     // Shield absorbs first
     if(player.shield>0){
       const used = Math.min(player.shield, left*0.8);
@@ -8147,7 +10103,7 @@ window.addEventListener('net:snapshot', (ev) => {
       if (isPath('earth') && hasG('earth','unbreakable') && !player._unbreakableUsed){
         player._unbreakableUsed = true;
         player.hp = 35;
-        aoeDamage(player.x, player.y, 120, 16, { col:'#7dffa3', stun:0.25 });
+        aoeDamage(player.x, player.y, 120, 16, { col:'#7dffa3', stun:0.25, kind:'earth' });
         addEffect(player.x,player.y,'pop',0.35,'#7dffa3');
         cam.shake = Math.max(cam.shake, 8);
         audio.hurt();
@@ -8158,7 +10114,7 @@ window.addEventListener('net:snapshot', (ev) => {
         player._rebirthUsed = true;
         player.hp = 40;
         // consume burn in a radius as burst
-        aoeDamage(player.x, player.y, 150, 22, { col:'#ff6a2a', burn:true });
+        aoeDamage(player.x, player.y, 150, 22, { col:'#ff6a2a', burn:true, kind:'fire' });
         addEffect(player.x,player.y,'pop',0.35,'#ff6a2a');
         cam.shake = Math.max(cam.shake, 9);
         audio.hurt();
@@ -8171,7 +10127,28 @@ window.addEventListener('net:snapshot', (ev) => {
     audio.hurt();
     if (player.hp < 0) player.hp = 0;
   }
-  function showGameOver(){ ovPause.style.display='grid'; ovPause.querySelector('h2').textContent='💀 Game Over'; }
+  function showGameOver(){
+    ovPause.style.display='grid';
+    ovPause.querySelector('h2').textContent = window.PVP_MODE ? '☠️ Eliminated!' : '💀 Game Over';
+  }
+
+  function formatMatchTime(secs){
+    const s = Math.max(0, Math.floor(secs));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return m + ':' + String(r).padStart(2,'0');
+  }
+
+  function showVictory(){
+    if (!ovVictory) return;
+    const killed = state.pvpBotsTotal || 0;
+    const timeEl = document.getElementById('victoryTime');
+    const killEl = document.getElementById('victoryBotsKilled');
+    if (killEl) killEl.textContent = String(killed);
+    if (timeEl) timeEl.textContent = formatMatchTime(state.pvpMatchClock || 0);
+    if (audio.musicOn) audio.stopMusic();
+    ovVictory.style.display = 'grid';
+  }
 
   window.addEventListener('pointerdown', ()=>{ try{audio.ctx?.resume?.();}catch(e){} if(audio.musicOn) audio.startMusic(); }, {once:true});
   state.running=false; updateHUD();

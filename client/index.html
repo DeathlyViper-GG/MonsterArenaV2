@@ -12,26 +12,76 @@
 <link rel="stylesheet" href="css/style.css">
 <style>
   /* ===== Glyph upgrade overlay ===== */
-  .glyph-card { width:min(980px, 94vw); }
+  @property --glyphHue {
+    syntax: '<angle>';
+    inherits: true;
+    initial-value: 200deg;
+  }
+  .glyph-card {
+    width:min(980px, 94vw);
+    position: relative;
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(130,170,255,0.10), rgba(0,0,0,0) 60%),
+      rgba(10,13,22,0.86);
+    border: 1px solid rgba(180,220,255,0.10);
+    border-radius: 22px;
+    overflow: hidden;
+  }
+  .glyph-card::before{
+    content:"";
+    position:absolute; inset:-2px;
+    border-radius: 22px;
+    padding: 2px;
+    background: conic-gradient(from var(--glyphHue, 200deg),
+      #ff6a2a, #9fe3ff, #c066ff, #4fd3ff, #7dffa3, #ff6a2a);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0.55;
+    animation: glyphBorderSpin 10s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes glyphBorderSpin {
+    to { --glyphHue: 560deg; }
+  }
+  .glyph-card h2{
+    text-align:center;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 22px;
+    margin: 2px 0 6px;
+    background: linear-gradient(90deg, #fff, #cfe9ff 45%, #ffd7a3 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 24px rgba(160,210,255,0.25);
+  }
   .glyph-timer { opacity:0.85; margin:6px 0 14px; }
   #glyphCanvas { 
     width:min(640px, 92vw);
     height:auto;
     display:block;
     margin: 10px auto 12px;
-    border-radius: 16px;
-    background: radial-gradient(circle at 50% 45%, rgba(80,110,160,0.25), rgba(5,8,16,0.65));
-    box-shadow: 0 10px 35px rgba(0,0,0,0.35) inset, 0 10px 22px rgba(0,0,0,0.25);
+    border-radius: 18px;
+    background: radial-gradient(circle at 50% 45%, rgba(80,110,160,0.25), rgba(5,8,16,0.7) 70%);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.45) inset, 0 0 40px rgba(120,170,255,0.10), 0 10px 22px rgba(0,0,0,0.25);
+    border: 1px solid rgba(180,220,255,0.14);
   }
   .glyph-info{
     margin-top:10px;
-    padding:12px 14px;
-    border-radius: 14px;
-    background: rgba(10,14,24,0.55);
-    border: 1px solid rgba(180,220,255,0.12);
+    padding:14px 16px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(20,26,42,0.75), rgba(10,14,24,0.6));
+    border: 1px solid rgba(180,220,255,0.14);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
   }
-  .glyph-info h3 { margin:0 0 6px; }
-  .glyph-info p { margin:0 0 10px; opacity:0.9; line-height:1.35; }
+  .glyph-info h3 {
+    margin:0 0 6px;
+    letter-spacing:0.03em;
+    color: #eaf4ff;
+    text-shadow: 0 0 14px rgba(160,210,255,0.35);
+  }
+  .glyph-info p { margin:0 0 10px; opacity:0.92; line-height:1.4; }
   .glyph-row{
     display:flex;
     gap:10px;
@@ -39,7 +89,30 @@
     justify-content:space-between;
     flex-wrap:wrap;
   }
-  .chip.small { font-size: 12px; padding: 3px 8px; }
+  .chip.small {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(180,220,255,0.18);
+  }
+  #glyphEnchant.bigBtn{
+    background: linear-gradient(180deg, #6fb4ff, #3d7ee0);
+    border: 1px solid rgba(255,255,255,0.25);
+    box-shadow: 0 6px 18px rgba(60,120,220,0.4), 0 0 0 rgba(120,180,255,0.5);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    letter-spacing: 0.05em;
+  }
+  #glyphEnchant.bigBtn:not(:disabled):hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(60,140,255,0.55), 0 0 24px rgba(120,180,255,0.35);
+    filter: brightness(1.08);
+  }
+  #glyphEnchant.bigBtn:disabled{
+    background: linear-gradient(180deg, #3a4258, #2a3040);
+    box-shadow: none;
+    opacity: 0.6;
+  }
 </style>
 
 </head>
@@ -252,6 +325,22 @@
   </div>
 </div>
 
+<!-- VICTORY (PvP) -->
+<div id="overlayVictory" class="overlay">
+  <div class="card victory-card">
+    <h2 class="victory-title">🏆 VICTORY!</h2>
+    <p class="intro-text" id="victorySubtitle">Every bot is down. You're the last one standing.</p>
+    <div class="row" style="justify-content:center; margin-top:10px;">
+      <span class="chip">Bots Eliminated: <span id="victoryBotsKilled">0</span></span>
+      <span class="chip">Time Survived: <span id="victoryTime">0:00</span></span>
+    </div>
+    <div class="row" style="justify-content:center; margin-top:16px;">
+      <button class="btn bigBtn" id="victoryRestartBtn">🔄 Play Again</button>
+      <button class="btn" id="victoryHomeBtn">🏠 Home</button>
+    </div>
+  </div>
+</div>
+
 <!-- HELP -->
 <div id="overlayHelp" class="overlay">
   <div class="card">
@@ -450,7 +539,7 @@
 <script src="js/melee_sprites.js"></script>
 <script src="js/network_http.js"></script>
 <script src="js/bot_sp.js"></script>
-<script src="js/pve16.js"></script>
+<script src="js/pve16.js?v=buildings1"></script>
 <script>
   if (/Mobi|Android|iPad|iPhone/i.test(navigator.userAgent)) {
     const help = document.getElementById('helpOverlay');
@@ -459,7 +548,7 @@
 </script>
 
 <!-- NEW ENTRYPOINT -->
-<script type="module" src="js/main2.js"></script>
+<script src="js/main2.js"></script>
 <script>
   /* ===================================================== */
   /* MENU + OVERLAYS (FIXED, NEW FILE VERSION)             */
@@ -492,6 +581,14 @@
   function moveLevelsToMulti() {
     const grid = document.getElementById('levelsGrid');
     const strip = document.getElementById('multiLevelStrip');
+    if (!grid || !strip) return;
+    strip.innerHTML = '';
+    strip.appendChild(grid);
+  }
+
+  function moveLevelsToOffline() {
+    const grid = document.getElementById('levelsGrid');
+    const strip = document.getElementById('offlineLevelStrip');
     if (!grid || !strip) return;
     strip.innerHTML = '';
     strip.appendChild(grid);
@@ -613,12 +710,12 @@
 
   document.getElementById('btnOfflinePVE')?.addEventListener('click', () => {
     OFFLINE_MODE_TYPE = "pve";
-    moveLevelsToSingle();
+    moveLevelsToOffline();
   });
 
   document.getElementById('btnOfflinePVP')?.addEventListener('click', () => {
     OFFLINE_MODE_TYPE = "pvp";
-    moveLevelsToSingle();
+    moveLevelsToOffline();
   });
 
   /* ===================================================== */

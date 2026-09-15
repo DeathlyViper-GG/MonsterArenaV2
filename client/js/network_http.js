@@ -249,6 +249,30 @@
       });
     },
 
+    async setGlyphPath(path) {
+      if (!this.state.lobbyId || !this.state.peerId) return;
+      try {
+        const r = await fetch(`${BASE}/glyph/path`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lobbyId: this.state.lobbyId, peerId: this.state.peerId, path })
+        });
+        return r.json();
+      } catch { return { ok: false }; }
+    },
+
+    async unlockGlyph(path, key) {
+      if (!this.state.lobbyId || !this.state.peerId) return;
+      try {
+        const r = await fetch(`${BASE}/glyph/unlock`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lobbyId: this.state.lobbyId, peerId: this.state.peerId, path, key })
+        });
+        return r.json();
+      } catch { return { ok: false }; }
+    },
+
     sendHit(target, x, y, dmg, kind = "") {
         fetch(`${BASE}/hit`, {
           method: "POST",

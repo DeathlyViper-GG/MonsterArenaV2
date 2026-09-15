@@ -9,6 +9,7 @@
 
 import express from "express";
 import { initBots, updateBots, bakeBotsSnapshot } from "./bots.js";
+import { GLYPH_KEYS, makeGlyphState, tickEnemyGlyphStatus, glyphMoveMul, applyGlyphHit, applyGlyphKill, thornmailReflect } from "./glyph.js";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -495,7 +496,7 @@ function touchDps(type, bossVariant=0){
 // Player HP helpers (server authoritative)
 // -----------------------------------------------------------------------------
 function clampHp(p){
-  p.hp = Math.max(0, Math.min(100, p.hp ?? 100));
+  p.hp = Math.max(0, Math.min(p.hpMax ?? 100, p.hp ?? 100));
 }
 
 function applyPlayerDamage(lobby, playerId, dmg){
@@ -704,6 +705,52 @@ const LEVEL_SPECS = {
   5: { hazards: { kind: 'void', count: 16 } },
 };
 
+// Chest rarity tiers — mirrors client/js/pve16.js CHEST_RARITIES.
+const CHEST_RARITY_WEIGHTS = {
+  1: [72, 24, 4,  0],
+  2: [56, 30, 11, 3],
+  3: [40, 32, 20, 8],
+  4: [26, 32, 28, 14],
+  5: [16, 28, 34, 22],
+};
+const CHEST_RARITY_KEYS = ['common','rare','epic','legendary'];
+function rollChestRarity(levelId, waveBonus = 0){
+  const base = CHEST_RARITY_WEIGHTS[levelId] || CHEST_RARITY_WEIGHTS[1];
+  const w = base.slice();
+  if (waveBonus > 0){
+    const shift = Math.min(waveBonus * 1.5, w[0] * 0.6);
+    w[0] -= shift; w[2] += shift * 0.5; w[3] += shift * 0.5;
+  }
+  const total = w[0]+w[1]+w[2]+w[3];
+  let r = rand(0, total);
+  for (let i=0;i<4;i++){ if (r < w[i]) return CHEST_RARITY_KEYS[i]; r -= w[i]; }
+  return 'common';
+}
+const CHEST_LOOT_TABLE = {
+  common:    { n:[2,3], essence:[3,6],   bonusChance:0.00 },
+  rare:      { n:[3,4], essence:[6,10],  bonusChance:0.20 },
+  epic:      { n:[3,5], essence:[10,16], bonusChance:0.45 },
+  legendary: { n:[4,6], essence:[18,28], bonusChance:0.75 },
+};
+function rollChestDropsForServer(ch){
+  const cfg = CHEST_LOOT_TABLE[ch.rarity] || CHEST_LOOT_TABLE.common;
+  const types = ['health','speed','shield','ammo'];
+  const out = [];
+  const n = rint(cfg.n[0], cfg.n[1]);
+  for (let i=0;i<n;i++){
+    const a = rand(0, Math.PI*2);
+    const d = rand(18, 36);
+    out.push({ x: ch.x + Math.cos(a)*d, y: ch.y + Math.sin(a)*d, type: types[rint(0, types.length-1)] });
+  }
+  const ea = rand(0, Math.PI*2), ed = rand(10, 20);
+  out.push({ x: ch.x + Math.cos(ea)*ed, y: ch.y + Math.sin(ea)*ed, type:'essence', value: rint(cfg.essence[0], cfg.essence[1]) });
+  if (rand(0,1) < cfg.bonusChance){
+    const a2 = rand(0, Math.PI*2), d2 = rand(20, 40);
+    out.push({ x: ch.x + Math.cos(a2)*d2, y: ch.y + Math.sin(a2)*d2, type: types[rint(0, types.length-1)] });
+  }
+  return out;
+}
+
 function makeDoors(x,y,w,h,t){
   const sides = ['top','bottom','left','right'];
   const doorCount = rint(1,3);
@@ -757,10 +804,12 @@ function rebuildWalls(solids, buildings){
   }
   return walls;
 }
-function buildChestsForWorld(buildings, hazards){
+function buildChestsForWorld(buildings, hazards, levelId){
   const chests = [];
   const B = buildings.length;
-  const desired = Math.max(0, Math.min(B, Math.round(B * 8 / 15))); // ~8/15
+  // Deeper levels dedicate a slightly larger share of buildings to loot.
+  const frac = Math.min(0.75, 8/15 + ((levelId||1) - 1) * 0.03);
+  const desired = Math.max(0, Math.min(B, Math.round(B * frac)));
   if (desired === 0) return chests;
 
   // deterministic shuffle of building indices
@@ -800,7 +849,8 @@ function buildChestsForWorld(buildings, hazards){
         r: 16,
         opened: false,
         buildingIndex: bi,
-        drops: null
+        drops: null,
+        rarity: rollChestRarity(levelId)
       });
       placed = true;
     }
@@ -823,7 +873,7 @@ function buildWorld(levelId, mapSeed){
   const PATH_GAP = 44;
   const EDGE_GAP = 40;
   const MAX_TRIES = 120;
-  const COUNT = 14 + Math.floor((levelId - 1) * 2);
+  const COUNT = 18 + Math.floor((levelId - 1) * 4);
 
   // Arena boundary solids (same as pve16.js)
   solids.push({ x:0, y:0, w:w, h:40 });
@@ -874,6 +924,19 @@ function buildWorld(levelId, mapSeed){
     }
   }
 
+  // Clutter pass — small crates/rocks so the arena isn't just a handful of
+  // sparse rectangles; density scales with level, matching the client.
+  const CLUTTER_GAP = 30;
+  const CLUTTER_COUNT = 8 + Math.floor((levelId - 1) * 4);
+  for (let i=0; i<CLUTTER_COUNT; i++){
+    for (let t=0; t<40; t++){
+      const r = randomRect(36, 64, 32, 56);
+      if (!avoidOverlap(r, CLUTTER_GAP)) continue;
+      solids.push({ x:r.x, y:r.y, w:r.w, h:r.h });
+      break;
+    }
+  }
+
   const walls = rebuildWalls(solids, buildings);
 
   // Hazards (same placement logic)
@@ -901,7 +964,7 @@ function buildWorld(levelId, mapSeed){
     }
   }
 
-  const chests = buildChestsForWorld(buildings, hazards);
+  const chests = buildChestsForWorld(buildings, hazards, levelId);
   return { walls, hazards, solids, buildings, chests };
 }
 
@@ -1193,9 +1256,10 @@ function randSpawnPointAwayFromPlayers(lobby, minDist = 520, r = 20) {
   }
   return { x: WORLD.w - 180, y: WORLD.h / 2 };
 }
-function desiredChestCount(buildings){
+function desiredChestCount(buildings, levelId){
   const B = (buildings || []).length;
-  return Math.max(0, Math.min(B, Math.round(B * 8 / 15)));
+  const frac = Math.min(0.75, 8/15 + ((levelId||1) - 1) * 0.03);
+  return Math.max(0, Math.min(B, Math.round(B * frac)));
 }
 
 function randomPointInInnerAvoidHazards(inner, hazards){
@@ -1223,7 +1287,7 @@ function topUpChestsForWave(lobby){
   lobby.world.chests = lobby.world.chests || [];
   const chests = lobby.world.chests;
 
-  const desired = desiredChestCount(buildings);
+  const desired = desiredChestCount(buildings, lobby.levelId);
   if (desired <= 0) return;
 
   // buildings that already have an ACTIVE (unopened) chest
@@ -1274,6 +1338,7 @@ function topUpChestsForWave(lobby){
     chest.opened = false;
     chest.buildingIndex = bi;
     chest.drops = null;
+    chest.rarity = rollChestRarity(lobby.levelId, lobby.wave || 0);
 
     need--;
   }
@@ -1358,6 +1423,9 @@ function startWave(lobby, n) {
 }
 
 function enemyAI(lobby, e, dt) {
+  // ✅ glyph stun (Lightning "Overload") freezes the enemy entirely
+  if ((e._stunT ?? 0) > 0) return;
+
   // pick nearest player
   let tgt = null;
   let best = Infinity;
@@ -1647,7 +1715,7 @@ function enemyAI(lobby, e, dt) {
   }
 
   // movement integration
-  const sp = (e.speed ?? 160) * moveMul;
+  const sp = (e.speed ?? 160) * moveMul * glyphMoveMul(e);
   const vx = Math.cos(moveAng) * sp;
   const vy = Math.sin(moveAng) * sp;
   moveEnemyWithCollide(lobby, e, vx * dt, vy * dt);
@@ -1687,6 +1755,13 @@ app.post('/lobby/join', (req, res) => {
     // ✅ gun skins + current weapon (authoritative)
     guns: { pistol: -1, rifle: -1, shotgun: -1 },
     weapon: 0,
+
+    // ✅ server-authoritative glyph state (so glyph bonuses work in multiplayer)
+    hpMax: 100,
+    essence: 0,
+    glyphPath: null,
+    glyph: makeGlyphState(),
+    completedGlyphs: {},
 
     lastSeen: now()
   });
@@ -1811,6 +1886,67 @@ app.post('/player/design', (req, res) => {
   res.json({ ok:true });
 });
 
+// ✅ Glyph selection / unlock — server-authoritative so the bonuses these
+// grant actually apply to the real (server-owned) PvE combat in multiplayer.
+const GLYPH_NODE_COST = 1; // matches client GLYPH_COST_* constants (all 1)
+
+app.post('/glyph/path', (req, res) => {
+  const { lobbyId, peerId, path } = req.body || {};
+  const lobby = LOBBIES.get(lobbyId);
+  if (!lobby) return res.json({ ok: false });
+
+  const p = lobby.players.get(peerId);
+  if (!p) return res.json({ ok: false });
+
+  if (!GLYPH_KEYS[path]) return res.json({ ok: false, error: 'unknown path' });
+
+  // picking a fresh core path costs essence, same as the client UI
+  if (!p.glyphPath || p.glyphPath !== path) {
+    if ((p.essence ?? 0) < GLYPH_NODE_COST) return res.json({ ok: false, error: 'not enough essence' });
+    p.essence -= GLYPH_NODE_COST;
+  }
+
+  p.glyphPath = path;
+  flushWaiters(lobby);
+  res.json({ ok: true, essence: p.essence });
+});
+
+app.post('/glyph/unlock', (req, res) => {
+  const { lobbyId, peerId, path, key } = req.body || {};
+  const lobby = LOBBIES.get(lobbyId);
+  if (!lobby) return res.json({ ok: false });
+
+  const p = lobby.players.get(peerId);
+  if (!p) return res.json({ ok: false });
+
+  if (!GLYPH_KEYS[path] || !GLYPH_KEYS[path].includes(key)) {
+    return res.json({ ok: false, error: 'unknown node' });
+  }
+  if (!p.glyph) p.glyph = makeGlyphState();
+  if (p.glyph[path][key]) return res.json({ ok: true, essence: p.essence }); // already unlocked
+
+  if ((p.essence ?? 0) < GLYPH_NODE_COST) return res.json({ ok: false, error: 'not enough essence' });
+
+  p.essence -= GLYPH_NODE_COST;
+  p.glyph[path][key] = true;
+
+  // one-time stat bumps that mirror the client's unlockNode()
+  if (path === 'earth' && key === 'bulwark') {
+    p.hpMax = Math.min(220, (p.hpMax ?? 100) + 25);
+    p.hp = Math.min(p.hpMax, (p.hp ?? 100) + 25);
+  }
+
+  // mark path fully completed once every node in it is unlocked, so the
+  // player can move on to another element (mirrors client isComplete()).
+  if (GLYPH_KEYS[path].every(k => p.glyph[path][k])) {
+    p.completedGlyphs = p.completedGlyphs || {};
+    p.completedGlyphs[path] = true;
+  }
+
+  flushWaiters(lobby);
+  res.json({ ok: true, essence: p.essence });
+});
+
 app.post('/chest/open', (req, res) => {
   const { lobbyId, peerId, chestId } = req.body;
   const lobby = LOBBIES.get(lobbyId);
@@ -1840,29 +1976,30 @@ app.post('/chest/open', (req, res) => {
 
   // open + generate drops (authoritative)
   ch.opened = true;
+  if (!ch.rarity) ch.rarity = rollChestRarity(lobby.levelId, lobby.wave || 0);
 
   // drops are stored on chest so all clients can spawn them from snapshot
-  const n = rint(2,3);
-  const types = ['health','speed','shield','ammo'];
-  const drops = [];
-  for (let i=0;i<n;i++){
-    const a = rand(0, Math.PI*2);
-    const d = rand(18, 36);
-    drops.push({
-      x: ch.x + Math.cos(a) * d,
-      y: ch.y + Math.sin(a) * d,
-      type: types[rint(0, types.length-1)]
-    });
-  }
+  const drops = rollChestDropsForServer(ch);
   ch.drops = drops;
   lobby.chestVer = (lobby.chestVer || 0) + 1;
   for (const d of drops) {
-    lobby.pickups.push({
-      x: d.x,
-      y: d.y,
-      r: 14,
-      type: d.type
-    });
+    if (d.type === 'essence') {
+      lobby.pickups.push({
+        x: d.x,
+        y: d.y,
+        r: 10,
+        type: 'xp',
+        v: d.value || 1,
+        bornAt: now()
+      });
+    } else {
+      lobby.pickups.push({
+        x: d.x,
+        y: d.y,
+        r: 14,
+        type: d.type
+      });
+    }
   }
   lobby.pickupVer++;
 
@@ -1977,19 +2114,23 @@ app.post('/hit', (req, res) => {
 
     if (best >= 0) {
       const en = lobby.enemies[best];
-      en.hp -= dd;
+      const attacker = lobby.players.get(peerId);
+
+      // ✅ glyph-aware melee damage (server-authoritative)
+      applyGlyphHit(lobby, attacker, en, dd, 'melee');
 
       if (en.hp <= 0) {
-        awardPvEPoint(lobby, b.owner, en.type);
+        applyGlyphKill(lobby, en, peerId);
+        awardPvEPoint(lobby, peerId, en.type);
 
         spawnXpOrbs(
           lobby,
-          e.x,
-          e.y,
-          Math.max(1, pvePointsForType(e.type))
+          en.x,
+          en.y,
+          Math.max(1, pvePointsForType(en.type))
         );
 
-        lobby.enemies.splice(hitIndex, 1);
+        lobby.enemies.splice(best, 1);
       }
     }
 
@@ -2412,10 +2553,17 @@ setInterval(() => {
 
       for (let i = lobby.enemies.length - 1; i >= 0; i--) {
         const e = lobby.enemies[i];
+
+        // ✅ glyph DoTs (burn) / status timers — server-authoritative
+        tickEnemyGlyphStatus(lobby, e, dt);
+
         enemyAI(lobby, e, dt);
 
         const killedByHazard = applyEnemyHazards(lobby, e, dt);
         if (killedByHazard || e.hp <= 0) {
+
+          applyGlyphKill(lobby, e, e._lastHitBy);
+          if (e._lastHitBy) awardPvEPoint(lobby, e._lastHitBy, e.type);
 
           spawnXpOrbs(
             lobby,
@@ -2456,7 +2604,9 @@ setInterval(() => {
           const rr = (e.r ?? 16) + 16 - CONTACT_PAD;
 
           if (dist2(ep.x, ep.y, px, py) <= rr * rr) {
-            applyPlayerDamage(lobby, pid, dps * dt * 1.4);
+            const contactDmg = dps * dt * 1.4;
+            applyPlayerDamage(lobby, pid, contactDmg);
+            thornmailReflect(lobby, p, e, contactDmg); // ✅ Earth "Thornmail"
           }
         }
       }
@@ -2619,12 +2769,21 @@ setInterval(() => {
 
         if (hitIndex >= 0) {
           const en = lobby.enemies[hitIndex];
+          const shooter = lobby.players.get(b.owner);
 
-          en.hp -= b.dmg;
+          // ✅ glyph-aware damage (server-authoritative, so glyph bonuses
+          // actually land in multiplayer instead of only visually predicting
+          // on the shooter's own client)
+          applyGlyphHit(lobby, shooter, en, b.dmg, 'bullet');
 
           // ✅ final-hit credit for PvE leaderboard
           if (en.hp <= 0) {
+            applyGlyphKill(lobby, en, b.owner);
             awardPvEPoint(lobby, b.owner, en.type);
+            // ✅ also drop XP orbs here (this path previously killed the
+            // enemy without ever dropping any — starving players of the
+            // essence needed to buy glyphs at all)
+            spawnXpOrbs(lobby, en.x, en.y, Math.max(1, pvePointsForType(en.type)));
             lobby.enemies.splice(hitIndex, 1);
           }
 
@@ -2632,9 +2791,16 @@ setInterval(() => {
         }
       }
 
-      // remove dead enemies
+      // remove dead enemies (covers secondary glyph kills too — chain
+      // lightning / AoE detonate / soul-bind splash — not just the direct hit)
       for (let j = lobby.enemies.length - 1; j >= 0; j--) {
-        if (lobby.enemies[j].hp <= 0) lobby.enemies.splice(j, 1);
+        const en = lobby.enemies[j];
+        if (en.hp <= 0) {
+          applyGlyphKill(lobby, en, en._lastHitBy);
+          if (en._lastHitBy) awardPvEPoint(lobby, en._lastHitBy, en.type);
+          spawnXpOrbs(lobby, en.x, en.y, Math.max(1, pvePointsForType(en.type)));
+          lobby.enemies.splice(j, 1);
+        }
       }
     }
     removeDeadPlayers(lobby);

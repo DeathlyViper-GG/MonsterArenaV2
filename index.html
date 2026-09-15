@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Monster Arena – Official Site</title>
+  <meta name="description" content="Monster Arena is a fast-paced arena shooter with monsters, buffs, and leaderboard chasing. Play free in your browser.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root{ --bg:#0e0f13; --text:#e8eefb; --shadow: rgba(0,0,0,.5); }
+    html,body{
+      margin:0; padding:0;
+      background:var(--bg); color:var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial;
+      min-height:100%;
+    }
+
+    body{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+
+    .card{
+      width:min(100%, 960px);
+      background:linear-gradient(180deg,#151a29,#0f1422);
+      border:1px solid #223;
+      border-radius:16px;
+      padding:24px 26px 26px;
+      box-shadow:0 18px 50px rgba(0,0,0,.6);
+    }
+
+    .intro-title{
+      text-align:center;
+      font-size:38px;
+      letter-spacing:2px;
+      color:#9fd2ff;
+      text-shadow:0 0 18px rgba(120,180,255,.5);
+      margin:0 0 6px;
+    }
+
+    .intro-text{
+      text-align:center;
+      opacity:.85;
+      margin:4px 0 18px;
+    }
+
+    .hero-row{
+      display:flex;
+      gap:20px;
+      flex-wrap:wrap;
+      align-items:stretch;
+      margin-top:10px;
+    }
+
+    .hero-main{
+      flex:2;
+      min-width:260px;
+    }
+
+    .hero-side{
+      flex:1.2;
+      min-width:220px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .playPanel{
+      background:#0e1322;
+      border:1px solid #273059;
+      border-radius:14px;
+      padding:16px;
+      text-align:center;
+      box-shadow:0 10px 26px rgba(0,0,0,.55);
+    }
+
+    .bigBtn{
+      font-size:1.1em;
+      padding:14px 22px;
+      background:linear-gradient(180deg,#1b2340,#151b30);
+      border:1px solid #273059;
+      color:var(--text);
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      letter-spacing:.5px;
+      box-shadow:0 6px 16px var(--shadow);
+      text-decoration:none;
+      display:inline-block;
+      margin-top:8px;
+      transition:transform .08s ease, box-shadow .15s ease, background .2s ease;
+    }
+    .bigBtn:hover{
+      transform:translateY(-2px);
+      box-shadow:0 10px 26px rgba(0,0,0,.7);
+    }
+    .bigBtn:active{
+      transform:translateY(1px) scale(.98);
+    }
+
+    .tagline{
+      font-size:.9em;
+      opacity:.8;
+      margin-top:6px;
+    }
+
+    .featureList{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:12px;
+      margin-top:14px;
+    }
+
+    .featureCard{
+      background:#0e1322;
+      border:1px solid #273059;
+      border-radius:12px;
+      padding:10px 12px;
+      font-size:.9em;
+      line-height:1.4;
+    }
+
+    .featureTitle{
+      font-weight:800;
+      margin-bottom:4px;
+      color:#9fd2ff;
+    }
+
+    .leaderboardStat{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:6px;
+      min-width:160px;
+    }
+
+    .lbTitle{
+      font-size:.85em;
+      font-weight:900;
+      letter-spacing:.4px;
+      opacity:.85;
+      color:#9fd2ff;
+      text-shadow:0 0 6px rgba(120,180,255,.35);
+    }
+
+    .leaderboard{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+
+    .leaderboard .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      padding:3px 6px;
+      border-radius:6px;
+      background:linear-gradient(180deg,rgba(20,24,35,.55),rgba(13,17,25,.35));
+      border:1px solid #273059;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .leaderboard .name{
+      font-weight:700;
+      opacity:.9;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .leaderboard .score{
+      font-weight:900;
+      color:#7dffa3;
+      text-shadow:0 0 6px rgba(125,255,163,.35);
+    }
+
+    .leaderboard .row.rank-1{
+      border-color:#ffd166;
+      box-shadow:0 0 12px rgba(255,209,102,.55);
+    }
+    .leaderboard .row.rank-2{
+      border-color:#cfd9ff;
+      box-shadow:0 0 10px rgba(207,217,255,.45);
+    }
+    .leaderboard .row.rank-3{
+      border-color:#d19a66;
+      box-shadow:0 0 8px rgba(209,154,102,.45);
+    }
+
+    .footerNote{
+      margin-top:18px;
+      font-size:.8em;
+      opacity:.7;
+      text-align:center;
+    }
+
+    @media (max-width:700px){
+      .card{padding:18px 16px 20px;}
+      .intro-title{font-size:30px;}
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1 class="intro-title">MONSTER ARENA</h1>
+    <p class="intro-text">
+      Fast-paced arena combat. Dodge, shoot, grab buffs, and climb the leaderboard.
+    </p>
+
+    <section class="hero-row">
+      <div class="hero-main">
+        <div class="playPanel">
+          <h2>Play in your browser</h2>
+          <p class="tagline">No download. Just jump in and survive as long as you can.</p>
+          <a class="bigBtn" href="https://monster-arena.onrender.com" target="_blank" rel="noopener">
+            PLAY NOW
+          </a>
+        </div>
+
+        <div class="featureList">
+          <div class="featureCard">
+            <div class="featureTitle">Arena Chaos</div>
+            Monsters, projectiles, and buffs flying everywhere. Stay moving or get deleted.
+          </div>
+          <div class="featureCard">
+            <div class="featureTitle">Buff System</div>
+            Speed and shield buffs give you short bursts of power—time them or die trying.
+          </div>
+          <div class="featureCard">
+            <div class="featureTitle">Score Chasing</div>
+            Survive waves, chain kills, and push your high score higher every run.
+          </div>
+          <div class="featureCard">
+            <div class="featureTitle">Keyboard & Touch</div>
+            Designed for both desktop controls and on-screen sticks.
+          </div>
+        </div>
+      </div>
+
+      <aside class="hero-side">
+        <div class="leaderboardStat">
+          <div class="lbTitle">Sample Top Scores</div>
+          <div class="leaderboard">
+            <div class="row rank-1">
+              <span class="name">PlayerOne</span>
+              <span class="score">12,340</span>
+            </div>
+            <div class="row rank-2">
+              <span class="name">LaserWolf</span>
+              <span class="score">9,870</span>
+            </div>
+            <div class="row rank-3">
+              <span class="name">VoidRunner</span>
+              <span class="score">8,420</span>
+            </div>
+            <div class="row">
+              <span class="name">You?</span>
+              <span class="score">—</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <p class="footerNote">
+      Tip: bookmark this page and share it with friends so they can jump straight into Monster Arena.
+    </p>
+  </main>
+</body>
+</html>

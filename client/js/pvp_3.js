@@ -145,6 +145,241 @@
       hazards:{kind:'void', count:16},
       desc:'Void tiles. Enemies phase-dash at times.' },
   ];
+
+  // Themed background art -------------------------------------------------------
+  // Small deterministic PRNG so each level's texture is stable across redraws.
+  function makeThemePRNG(seed){
+    let s = seed >>> 0;
+    return function(){
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const _bgTileCache = new Map();
+  const BG_TILE_SIZE = 256;
+
+  // Draws el at (x,y) and mirrors it near tile edges so the pattern tiles seamlessly.
+  function wrapDrawOn(tctx, SIZE, x, y, drawFn){
+    const m = 44;
+    const pts = [[x, y]];
+    const left = x < m, right = x > SIZE - m, top = y < m, bottom = y > SIZE - m;
+    if (left) pts.push([x + SIZE, y]);
+    if (right) pts.push([x - SIZE, y]);
+    if (top) pts.push([x, y + SIZE]);
+    if (bottom) pts.push([x, y - SIZE]);
+    if (left && top) pts.push([x + SIZE, y + SIZE]);
+    if (right && bottom) pts.push([x - SIZE, y - SIZE]);
+    if (left && bottom) pts.push([x + SIZE, y - SIZE]);
+    if (right && top) pts.push([x - SIZE, y + SIZE]);
+    for (const [px, py] of pts) drawFn(px, py);
+  }
+
+  function drawMeadowTile(tctx, SIZE, rnd){
+    for (let i=0;i<9;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=20+rnd()*32;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        g.addColorStop(0,'rgba(80,150,80,0.12)'); g.addColorStop(1,'rgba(80,150,80,0)');
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<90;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, h=4+rnd()*7, lean=(rnd()-0.5)*4;
+      const shade=rnd(); const col = shade<0.33?'#2f5c34':shade<0.66?'#3c7a44':'#5aab5f';
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle=col; tctx.lineWidth=1.1; tctx.lineCap='round';
+        tctx.beginPath(); tctx.moveTo(px,py); tctx.quadraticCurveTo(px+lean,py-h/1.4, px+lean*1.6, py-h); tctx.stroke();
+        tctx.beginPath(); tctx.moveTo(px+2,py); tctx.quadraticCurveTo(px+2+lean,py-h/1.6, px+2+lean*1.4, py-h*0.8); tctx.stroke();
+      });
+    }
+    for (let i=0;i<12;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE; const col = rnd()<0.5?'#fff7c2':'#ffd6ec';
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=col;
+        for(let p=0;p<4;p++){ const ang=p*(Math.PI/2); tctx.beginPath(); tctx.arc(px+Math.cos(ang)*2.4, py+Math.sin(ang)*2.4, 1.6, 0, Math.PI*2); tctx.fill(); }
+        tctx.fillStyle='#e8b23a'; tctx.beginPath(); tctx.arc(px,py,1.3,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawDesertTile(tctx, SIZE, rnd){
+    tctx.strokeStyle='rgba(130,95,45,0.20)';
+    for (let i=0;i<12;i++){
+      const y0=rnd()*SIZE, amp=3+rnd()*5, ph=rnd()*Math.PI*2;
+      tctx.lineWidth=1+rnd()*1.4; tctx.beginPath();
+      for (let x=-10;x<=SIZE+10;x+=8){ const yy=y0+Math.sin(x*0.05+ph)*amp; if(x===-10) tctx.moveTo(x,yy); else tctx.lineTo(x,yy); }
+      tctx.stroke();
+    }
+    for (let i=0;i<26;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=1.5+rnd()*3;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle='rgba(95,68,36,0.5)'; tctx.beginPath(); tctx.ellipse(px,py,r,r*0.7,rnd()*Math.PI,0,Math.PI*2); tctx.fill();
+        tctx.fillStyle='rgba(190,150,85,0.35)'; tctx.beginPath(); tctx.ellipse(px-r*0.3,py-r*0.3,r*0.4,r*0.3,0,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<6;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(60,40,20,0.22)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py; for(let s=0;s<4;s++){ cx+=(rnd()-0.5)*18; cy+=(rnd()-0.5)*18; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+  }
+
+  function drawIceTile(tctx, SIZE, rnd){
+    for (let i=0;i<8;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=22+rnd()*32;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        g.addColorStop(0,'rgba(170,225,255,0.12)'); g.addColorStop(1,'rgba(170,225,255,0)');
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<11;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(205,240,255,0.28)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.2; cx+=Math.cos(ang)*8; cy+=Math.sin(ang)*8; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+    for (let i=0;i<55;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=0.6+rnd()*1.4;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=`rgba(255,255,255,${(0.2+rnd()*0.4).toFixed(2)})`;
+        tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawLavaTile(tctx, SIZE, rnd){
+    for (let i=0;i<15;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=14+rnd()*20;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle = rnd()<0.5?'rgba(45,17,17,0.35)':'rgba(65,27,22,0.3)';
+        const sides=5+Math.floor(rnd()*3); tctx.beginPath();
+        for (let s=0;s<sides;s++){ const ang=s/sides*Math.PI*2, rr=r*(0.7+rnd()*0.3); const px2=px+Math.cos(ang)*rr, py2=py+Math.sin(ang)*rr; if(s===0) tctx.moveTo(px2,py2); else tctx.lineTo(px2,py2); }
+        tctx.closePath(); tctx.fill();
+      });
+    }
+    for (let i=0;i<9;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(255,120,40,0.5)'; tctx.lineWidth=1.4;
+        tctx.shadowColor='rgba(255,140,50,0.8)'; tctx.shadowBlur=4;
+        tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.0; cx+=Math.cos(ang)*9; cy+=Math.sin(ang)*9; tctx.lineTo(cx,cy); }
+        tctx.stroke(); tctx.shadowBlur=0;
+      });
+    }
+    for (let i=0;i<22;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle='rgba(255,160,60,0.4)'; tctx.beginPath(); tctx.arc(px,py,1+rnd()*1.5,0,Math.PI*2); tctx.fill();
+      });
+    }
+  }
+
+  function drawVoidTile(tctx, SIZE, rnd){
+    for (let i=0;i<7;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=28+rnd()*36;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        const g=tctx.createRadialGradient(px,py,0,px,py,r);
+        const c = rnd()<0.5? '160,80,220' : '90,60,220';
+        g.addColorStop(0, `rgba(${c},0.14)`); g.addColorStop(1, `rgba(${c},0)`);
+        tctx.fillStyle=g; tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<65;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE, r=0.5+rnd()*1.3;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.fillStyle=`rgba(255,255,255,${(0.3+rnd()*0.5).toFixed(2)})`;
+        tctx.beginPath(); tctx.arc(px,py,r,0,Math.PI*2); tctx.fill();
+      });
+    }
+    for (let i=0;i<6;i++){
+      const x=rnd()*SIZE, y=rnd()*SIZE;
+      wrapDrawOn(tctx, SIZE, x, y, (px,py)=>{
+        tctx.strokeStyle='rgba(208,102,255,0.25)'; tctx.lineWidth=1; tctx.beginPath(); tctx.moveTo(px,py);
+        let cx=px, cy=py, ang=rnd()*Math.PI*2;
+        for(let s=0;s<5;s++){ ang+=(rnd()-0.5)*1.4; cx+=Math.cos(ang)*10; cy+=Math.sin(ang)*10; tctx.lineTo(cx,cy); } tctx.stroke();
+      });
+    }
+  }
+
+  function getThemeTile(theme){
+    if (_bgTileCache.has(theme.id)) return _bgTileCache.get(theme.id);
+    const SIZE = BG_TILE_SIZE;
+    const tcv = document.createElement('canvas');
+    tcv.width = SIZE; tcv.height = SIZE;
+    const tctx = tcv.getContext('2d');
+    const rnd = makeThemePRNG(theme.id * 7919 + 13);
+    switch (theme.hazards.kind){
+      case 'sand': drawDesertTile(tctx, SIZE, rnd); break;
+      case 'ice': drawIceTile(tctx, SIZE, rnd); break;
+      case 'lava': drawLavaTile(tctx, SIZE, rnd); break;
+      case 'void': drawVoidTile(tctx, SIZE, rnd); break;
+      default: drawMeadowTile(tctx, SIZE, rnd); break;
+    }
+    _bgTileCache.set(theme.id, tcv);
+    return tcv;
+  }
+
+  // Drifting atmospheric particles matched to the level's theme (fireflies, dust, snow, embers, void motes).
+  function drawAmbientParticles(theme, W, H){
+    const t = performance.now() / 1000;
+    let profile, count;
+    switch (theme.id){
+      case 1: profile='firefly'; count=16; break;
+      case 2: profile='dust'; count=20; break;
+      case 3: profile='snow'; count=26; break;
+      case 4: profile='ember'; count=20; break;
+      case 5: profile='voidmote'; count=18; break;
+      default: profile='dust'; count=14; break;
+    }
+    ctx.save();
+    for (let i=0;i<count;i++){
+      const seed = i*97.13 + theme.id*13.7;
+      const rx = Math.sin(seed)*0.5+0.5, ry = Math.cos(seed*1.7)*0.5+0.5;
+      let x, y, r, alpha, color;
+      switch (profile){
+        case 'firefly': {
+          x = rx*W + Math.sin(t*0.6+seed)*18; y = ry*H + Math.cos(t*0.5+seed*1.3)*14;
+          alpha = Math.max(0, 0.35+0.35*Math.sin(t*2+seed)); r=1.6;
+          color = `rgba(210,255,160,${alpha.toFixed(2)})`; break;
+        }
+        case 'dust': {
+          x = ((rx*W + t*10 + seed*5) % (W+40)) - 20; y = ry*H + Math.sin(t*0.3+seed)*10;
+          alpha = Math.max(0, 0.14+0.10*Math.sin(t+seed)); r=1+(i%3);
+          color = `rgba(230,200,140,${alpha.toFixed(2)})`; break;
+        }
+        case 'snow': {
+          x = rx*W + Math.sin(t*0.8+seed)*10; y = ((ry*H + t*18 + seed*7) % (H+40)) - 20;
+          alpha = Math.max(0, 0.35+0.25*Math.sin(t*3+seed)); r=1.2+(i%2);
+          color = `rgba(255,255,255,${alpha.toFixed(2)})`; break;
+        }
+        case 'ember': {
+          x = rx*W + Math.sin(t*0.9+seed)*14; y = (((ry*H - t*22 - seed*6) % (H+40)) + (H+40)) % (H+40) - 20;
+          alpha = Math.max(0, 0.4+0.3*Math.sin(t*4+seed)); r=1.4;
+          color = `rgba(255,150,60,${alpha.toFixed(2)})`; break;
+        }
+        case 'voidmote': default: {
+          x = rx*W + Math.sin(t*0.35+seed)*22; y = ry*H + Math.cos(t*0.28+seed*1.6)*22;
+          alpha = Math.max(0, 0.3+0.35*Math.sin(t*1.4+seed)); r=1.6+(i%2);
+          color = `rgba(208,102,255,${alpha.toFixed(2)})`; break;
+        }
+      }
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   let currentTheme = LEVELS[0];
   let SIM_TICK = 0;
   const FIXED_DT = 1 / 30; // 30Hz lockstep
@@ -227,6 +462,31 @@
   const angleTo=(ax,ay,bx,by)=>Math.atan2(by-ay, bx-ax);
   const nowMS=()=>performance.now();
 
+  // Chest rarity tiers ---------------------------------------------------------
+  // Mirrors the common/rare/epic/legendary language already used for weapons.
+  const CHEST_RARITIES = {
+    common:    { id:'common',    label:'Common',    order:0, wood:'#6b4a1a', panel:'#9c6a2a', trim:'#e5c26a', glow:'#e5c26a', scale:1.00 },
+    rare:      { id:'rare',      label:'Rare',      order:1, wood:'#1e3a52', panel:'#2f5f86', trim:'#7fd4ff', glow:'#7fd4ff', scale:1.06 },
+    epic:      { id:'epic',      label:'Epic',      order:2, wood:'#3a1e52', panel:'#6a2f96', trim:'#d38aff', glow:'#d38aff', scale:1.12 },
+    legendary: { id:'legendary', label:'Legendary', order:3, wood:'#523a1e', panel:'#a97a2a', trim:'#ffd166', glow:'#ffe38a', scale:1.2  },
+  };
+  // Rarity odds [common,rare,epic,legendary] per level id (1..5).
+  const CHEST_RARITY_WEIGHTS = {
+    1: [72, 24, 4,  0],
+    2: [56, 30, 11, 3],
+    3: [40, 32, 20, 8],
+    4: [26, 32, 28, 14],
+    5: [16, 28, 34, 22],
+  };
+  function rollChestRarity(levelId){
+    const w = (CHEST_RARITY_WEIGHTS[clamp(levelId||1,1,5)] || CHEST_RARITY_WEIGHTS[1]);
+    const total = w[0]+w[1]+w[2]+w[3];
+    let r = rand(0, total);
+    const keys = ['common','rare','epic','legendary'];
+    for (let i=0;i<4;i++){ if (r < w[i]) return keys[i]; r -= w[i]; }
+    return 'common';
+  }
+
   // COLORS & DESIGNS ---------------------------------------------------------
   const COLORS = [
     {name:'Blue Core',  c:'#98d7ff'},
@@ -289,7 +549,8 @@
       const PATH_GAP = 44;          // minimum free gap between ANY rectangles
       const EDGE_GAP = 40;          // minimum distance from world edges
       const MAX_TRIES = 120;        // attempts per rectangle
-      const COUNT = 14 + Math.floor((currentTheme.id - 1) * 2);
+      const lvl = currentTheme.id;
+      const COUNT = 18 + Math.floor((lvl - 1) * 4);
 
       // Arena walls (same as before)
       const arenaLeft   = 0;
@@ -355,6 +616,19 @@
           placed = true;
         }
         // If not placed after MAX_TRIES, we skip this slot to keep generation robust
+      }
+
+      // --- Clutter pass: small crates/rocks scattered between the buildings so
+      // the arena reads as a lived-in map instead of a handful of sparse boxes.
+      const CLUTTER_GAP = 30;
+      const CLUTTER_COUNT = 8 + Math.floor((lvl - 1) * 4);
+      for (let i = 0; i < CLUTTER_COUNT; i++){
+        for (let t = 0; t < 40; t++){
+          const r = randomRect(36, 64, 32, 56);
+          if (!avoidOverlap(r, CLUTTER_GAP)) continue;
+          this.solids.push(this.rr(r.x, r.y, r.w, r.h));
+          break;
+        }
       }
 
       // Rebuild wall segments around everything we placed
@@ -425,16 +699,18 @@
       this.hazards = hz;
     },
     buildChests(){
+      const lvl = currentTheme.id;
+      const spawnChance = clamp(0.5 + (lvl - 1) * 0.05, 0, 0.85);
       for(let i=0;i<this.buildings.length;i++){
         const b = this.buildings[i];
-        if (rand(0,1) < 0.55){
+        if (rand(0,1) < spawnChance){
           const pad=28; const cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad);
           const cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad);
           let ovr=false; for(const h of this.hazards){ if(cx>h.x-20 && cx<h.x+h.w+20 && cy>h.y-20 && cy<h.y+h.h+20){ ovr=true; break; } }
           if(ovr) continue;
           const ch = {
             id: this.chests.length,
-            x:cx, y:cy, r:16, opened:false, buildingIndex:i 
+            x:cx, y:cy, r:16, opened:false, buildingIndex:i, rarity: rollChestRarity(lvl)
           };
           b.hasChest=true; b.chestId = this.chests.length; this.chests.push(ch);
         }
@@ -453,11 +729,29 @@
       const g = ctx.createLinearGradient(0,0,0,canvas.height);
       g.addColorStop(0, currentTheme.floor.c1); g.addColorStop(1, currentTheme.floor.c2);
       ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      // 🎨 Themed environment texture (grass / sand / ice / lava / void), scrolls with the world
+      const bgTile = getThemeTile(currentTheme);
+      if (bgTile && bgTile.width) {
+        const pat = ctx.createPattern(bgTile, 'repeat');
+        const btx = -((cam.x + cam.sx) % bgTile.width);
+        const bty = -((cam.y + cam.sy) % bgTile.height);
+        ctx.save();
+        ctx.translate(btx, bty);
+        ctx.fillStyle = pat;
+        ctx.fillRect(-btx, -bty, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
       const grid=64, ox=-((cam.x+cam.sx)%grid), oy=-((cam.y+cam.sy)%grid);
       ctx.strokeStyle=currentTheme.floor.grid; ctx.lineWidth=1; ctx.beginPath();
       for(let x=ox; x<canvas.width; x+=grid){ ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
       for(let y=oy; y<canvas.height; y+=grid){ ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
       ctx.stroke();
+
+      // ✨ Ambient atmosphere particles matched to this level (fireflies, dust, snow, embers, void motes)
+      drawAmbientParticles(currentTheme, canvas.width, canvas.height);
+
       const vg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.min(canvas.width,canvas.height)/3,
                                           canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)/1.1);
       vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.35)');
@@ -767,8 +1061,14 @@
       ctx.lineWidth=2;
       for(const s of this.solids){
         const x=s.x - cam.x - cam.sx, y=s.y - cam.y - cam.sy;
-        ctx.fillStyle=currentTheme.obs.fill; ctx.strokeStyle=currentTheme.obs.stroke;
-        roundRect(ctx,x,y,s.w,s.h,10); ctx.fill(); ctx.stroke();
+        const isBorder = (s.w >= this.w - 2) || (s.h >= this.h - 2);
+        if (isBorder){
+          drawBorderWall(ctx, s, x, y, currentTheme);
+        } else if (s.w <= 72 && s.h <= 64){
+          drawRockCluster(ctx, s, x, y, currentTheme, 'small');
+        } else {
+          drawRockCluster(ctx, s, x, y, currentTheme, 'large');
+        }
       }
       for(const b of this.buildings){
         const x=b.x - cam.x - cam.sx, y=b.y - cam.y - cam.sy;
@@ -788,15 +1088,192 @@
         const b=this.buildings[ch.buildingIndex];
         if(!pointInRect(player.x,player.y,b.inner)) continue;
         const x=ch.x - cam.x - cam.sx, y=ch.y - cam.y - cam.sy;
+        const rar = CHEST_RARITIES[ch.rarity] || CHEST_RARITIES.common;
+        const s = rar.scale;
         ctx.save(); ctx.translate(x,y);
-        ctx.fillStyle='#6b4a1a'; roundRect(ctx,-14,-10,28,20,4); ctx.fill();
-        ctx.fillStyle='#9c6a2a'; roundRect(ctx,-12,-8,24,16,3); ctx.fill();
-        ctx.strokeStyle='#e5c26a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(8,0); ctx.stroke();
+        if (rar.order > 0){
+          const pulse = 0.55 + 0.25 * Math.sin(nowMS()*0.004 + ch.id);
+          ctx.save();
+          ctx.globalAlpha = 0.18 + 0.10*rar.order * pulse;
+          ctx.fillStyle = rar.glow;
+          ctx.beginPath(); ctx.arc(0, -2, 20*s + rar.order*3, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle=rar.wood; roundRect(ctx,-14*s,-10*s,28*s,20*s,4); ctx.fill();
+        ctx.fillStyle=rar.panel; roundRect(ctx,-12*s,-8*s,24*s,16*s,3); ctx.fill();
+        ctx.strokeStyle=rar.trim; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-8*s,0); ctx.lineTo(8*s,0); ctx.stroke();
+        if (rar.order > 0){
+          ctx.fillStyle = rar.trim;
+          const cw=3.2, corners=[[-12*s,-8*s],[12*s,-8*s],[-12*s,8*s],[12*s,8*s]];
+          for (const [cx0,cy0] of corners){ ctx.beginPath(); ctx.arc(cx0,cy0,cw,0,Math.PI*2); ctx.fill(); }
+        }
         ctx.restore();
+        if (rar.order >= 2){
+          ctx.save();
+          ctx.font = '11px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = rar.glow;
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(rar.label, x, y - 18*s);
+          ctx.restore();
+        }
       }
     }
   };
   function roundRect(c,x,y,w,h,r){ const rr=Math.max(0, Math.min(r, Math.min(w,h)/2)); c.beginPath(); c.moveTo(x+rr,y); c.arcTo(x+w,y,x+w,y+h,rr); c.arcTo(x+w,y+h,x,y+h,rr); c.arcTo(x,y+h,x,y,rr); c.arcTo(x,y,x+w,y,rr); c.closePath(); }
+
+  // Rock / obstacle palettes, themed so boulders read as the level's terrain.
+  function rockPalette(theme){
+    switch (theme.hazards.kind){
+      case 'sand': return { base:'#9c7a48', baseLo:'#5c4426', hi:'#d9bd85', crack:'rgba(50,35,18,0.55)', accent:'#e3cf94', kind:'sand' };
+      case 'ice':  return { base:'#a9d7ec', baseLo:'#5f8ea8', hi:'#f2fcff', crack:'rgba(255,255,255,0.6)', accent:'#eafcff', kind:'ice' };
+      case 'lava': return { base:'#4a3532', baseLo:'#1c1210', hi:'#6b4b42', crack:'rgba(255,120,45,0.9)', accent:'#ff8a3a', kind:'lava' };
+      case 'void': return { base:'#5a4a80', baseLo:'#241a38', hi:'#9075c0', crack:'rgba(208,102,255,0.75)', accent:'#d066ff', kind:'void' };
+      default:     return { base:'#6a7a5c', baseLo:'#343c2c', hi:'#98a982', crack:'rgba(30,25,15,0.45)', accent:'#6ca24f', kind:'moss' };
+    }
+  }
+
+  // Builds a jagged, irregular boulder silhouette (path only — caller fills/strokes/clips).
+  function buildRockPath(ctx, cx, cy, rx, ry, rnd, vertsIn){
+    const verts = vertsIn || (7 + Math.floor(rnd() * 4));
+    ctx.beginPath();
+    for (let i = 0; i < verts; i++){
+      const ang = (i / verts) * Math.PI * 2;
+      const jitter = 0.70 + rnd() * 0.55;
+      const px = cx + Math.cos(ang) * rx * jitter;
+      const py = cy + Math.sin(ang) * ry * jitter;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  // Draws a cluster of jagged boulders/rocks filling a bounding box, themed per level.
+  // 'seedable' rect (world-space x/y/w/h) keeps the same jagged shape every frame without storing state.
+  function drawRockCluster(ctx, rect, x, y, theme, scale){
+    const seed = Math.floor(Math.abs(rect.x * 13.1 + rect.y * 7.7 + rect.w * 3.3 + rect.h * 2.1)) >>> 0;
+    const rnd = makeThemePRNG(seed);
+    const pal = rockPalette(theme);
+    const w = rect.w, h = rect.h;
+    const cx = x + w / 2, cy = y + h / 2;
+    const isLarge = scale === 'large';
+    const n = isLarge ? (2 + Math.floor(rnd() * 3)) : (1 + Math.floor(rnd() * 2));
+
+    const rocks = [];
+    for (let i = 0; i < n; i++){
+      const ox = (rnd() - 0.5) * w * 0.5;
+      const oy = (rnd() - 0.5) * h * 0.5;
+      const rw = w * (isLarge ? (0.40 + rnd() * 0.30) : (0.55 + rnd() * 0.35));
+      const rh = h * (isLarge ? (0.40 + rnd() * 0.30) : (0.55 + rnd() * 0.35));
+      rocks.push({ x: cx + ox, y: cy + oy, rx: rw / 2, ry: rh / 2 });
+    }
+    rocks.sort((a, b) => a.y - b.y);
+
+    // Ground contact shadow so rocks feel planted, not floating.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(cx, y + h + 1, w * 0.40, Math.max(4, h * 0.14), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    for (const r of rocks){
+      ctx.save();
+      buildRockPath(ctx, r.x, r.y, r.rx, r.ry, rnd);
+      const grad = ctx.createLinearGradient(r.x - r.rx, r.y - r.ry, r.x + r.rx, r.y + r.ry);
+      grad.addColorStop(0, pal.hi);
+      grad.addColorStop(0.5, pal.base);
+      grad.addColorStop(1, pal.baseLo);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = pal.baseLo;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      buildRockPath(ctx, r.x, r.y, r.rx, r.ry, rnd);
+      ctx.clip();
+
+      // Faceted shading — a few dark lines radiating from an off-center point, like cut rock faces.
+      const facets = 3 + Math.floor(rnd() * 3);
+      const fx = r.x - r.rx * 0.25, fy = r.y - r.ry * 0.25;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+      for (let f = 0; f < facets; f++){
+        const a1 = rnd() * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + Math.cos(a1) * r.rx * 1.3, fy + Math.sin(a1) * r.ry * 1.3);
+        ctx.stroke();
+      }
+
+      // Cracks / veins, colored per theme.
+      ctx.strokeStyle = pal.crack;
+      ctx.lineWidth = 1.3;
+      for (let c = 0; c < 2; c++){
+        let cx0 = r.x + (rnd() - 0.5) * r.rx, cy0 = r.y + (rnd() - 0.5) * r.ry;
+        ctx.beginPath(); ctx.moveTo(cx0, cy0);
+        let ang = rnd() * Math.PI * 2;
+        for (let s = 0; s < 3; s++){ ang += (rnd() - 0.5) * 1.2; cx0 += Math.cos(ang) * r.rx * 0.32; cy0 += Math.sin(ang) * r.ry * 0.32; ctx.lineTo(cx0, cy0); }
+        ctx.stroke();
+      }
+
+      // Theme-specific surface accent.
+      if (pal.kind === 'moss'){
+        for (let m = 0; m < 3; m++){
+          const mx = r.x + (rnd() - 0.5) * r.rx * 1.3, my = r.y + r.ry * 0.35 + (rnd() - 0.3) * r.ry * 0.5;
+          ctx.fillStyle = pal.accent + 'aa';
+          ctx.beginPath(); ctx.ellipse(mx, my, 4 + rnd() * 4, 2 + rnd() * 2, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (pal.kind === 'ice'){
+        ctx.fillStyle = 'rgba(255,255,255,0.38)';
+        ctx.beginPath(); ctx.ellipse(r.x - r.rx * 0.2, r.y - r.ry * 0.4, r.rx * 0.5, r.ry * 0.25, -0.3, 0, Math.PI * 2); ctx.fill();
+      } else if (pal.kind === 'lava'){
+        ctx.save();
+        ctx.shadowColor = pal.accent; ctx.shadowBlur = 6;
+        ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(r.x - r.rx * 0.4, r.y);
+        ctx.lineTo(r.x, r.y + r.ry * 0.2);
+        ctx.lineTo(r.x + r.rx * 0.4, r.y - r.ry * 0.3);
+        ctx.stroke();
+        ctx.restore();
+      } else if (pal.kind === 'sand'){
+        ctx.strokeStyle = 'rgba(80,60,30,0.4)'; ctx.lineWidth = 1;
+        for (let s = 0; s < 3; s++){
+          const sy0 = r.y - r.ry * 0.5 + s * r.ry * 0.45;
+          ctx.beginPath(); ctx.moveTo(r.x - r.rx * 0.6, sy0); ctx.lineTo(r.x + r.rx * 0.6, sy0 + 2); ctx.stroke();
+        }
+      } else if (pal.kind === 'void'){
+        ctx.save();
+        ctx.shadowColor = pal.accent; ctx.shadowBlur = 8;
+        ctx.fillStyle = pal.accent; ctx.globalAlpha = 0.75;
+        ctx.beginPath(); ctx.arc(r.x, r.y, 2.3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore(); // end clip
+      ctx.restore();
+    }
+  }
+
+  // Reinforced arena boundary wall — visually distinct from the rock obstacles inside it.
+  function drawBorderWall(ctx, rect, x, y, theme){
+    ctx.save();
+    ctx.fillStyle = theme.obs.fill;
+    ctx.fillRect(x, y, rect.w, rect.h);
+    ctx.strokeStyle = theme.obs.stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, rect.w - 2, rect.h - 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    if (rect.w >= rect.h){
+      for (let px = x + 20; px < x + rect.w - 10; px += 40){ ctx.beginPath(); ctx.moveTo(px, y + 3); ctx.lineTo(px, y + rect.h - 3); ctx.stroke(); }
+    } else {
+      for (let py = y + 20; py < y + rect.h - 10; py += 40){ ctx.beginPath(); ctx.moveTo(x + 3, py); ctx.lineTo(x + rect.w - 3, py); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+
   const pointInRect=(px,py, r)=> px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h;
 
   // NAV ----------------------------------------------------------------------
@@ -1319,26 +1796,37 @@ if (btnHomeCustomize){
     const type = forcedType || opts[rint(0,opts.length-1)];
     ents.pickups.push({x,y,r:10,type,t:0});
   }
+  // Loot table per chest rarity — no essence currency in PvP, so better
+  // chests just mean more pickups and a real shot at a bonus item.
+  const CHEST_LOOT_TABLE = {
+    common:    { n:[2,3], bonusChance:0.00 },
+    rare:      { n:[3,4], bonusChance:0.20 },
+    epic:      { n:[3,5], bonusChance:0.45 },
+    legendary: { n:[4,6], bonusChance:0.75 },
+  };
+  function rollChestDrops(ch){
+    const cfg = CHEST_LOOT_TABLE[ch.rarity] || CHEST_LOOT_TABLE.common;
+    const opts=['health','speed','shield','ammo'];
+    const out=[];
+    const n = rint(cfg.n[0], cfg.n[1]);
+    for(let i=0;i<n;i++){
+      const a = rand(0,Math.PI*2);
+      const d = rand(18,36);
+      out.push({ x: ch.x + Math.cos(a)*d, y: ch.y + Math.sin(a)*d, type: opts[rint(0,opts.length-1)] });
+    }
+    if (rand(0,1) < cfg.bonusChance){
+      const a2 = rand(0,Math.PI*2), d2 = rand(20,40);
+      out.push({ x: ch.x + Math.cos(a2)*d2, y: ch.y + Math.sin(a2)*d2, type: opts[rint(0,opts.length-1)] });
+    }
+    return out;
+  }
   function openChest(ch, remoteDrops=null){
     if (ch.opened) return;
     ch.opened = true;
     audio.chest();
+    if (!ch.rarity) ch.rarity = 'common';
 
-    const drops = remoteDrops || (() => {
-      const opts=['health','speed','shield','ammo'];
-      const n = rint(2,3);
-      const out=[];
-      for(let i=0;i<n;i++){
-      const a = rand(0,Math.PI*2);
-      const d = rand(18,36);
-      out.push({
-        x: ch.x + Math.cos(a)*d,
-        y: ch.y + Math.sin(a)*d,
-        type: opts[rint(0,opts.length-1)]
-      });
-      }
-      return out;
-    })();
+    const drops = remoteDrops || rollChestDrops(ch);
 
     for (const d of drops) dropPickup(d.x, d.y, d.type);
 
@@ -1351,7 +1839,7 @@ if (btnHomeCustomize){
       });
     }
     }
-  function respawnCollectedChests(){ const freeBuildings = []; for(let i=0;i<world.buildings.length;i++){ if(!world.buildings[i].hasChest) freeBuildings.push(i); } for(let i=0;i<world.chests.length;i++){ const ch = world.chests[i]; if(!ch.opened) continue; const prevIdx=ch.buildingIndex; world.buildings[prevIdx].hasChest=false; const candidates = freeBuildings.filter(idx=> idx!==prevIdx); if(candidates.length===0) continue; const newIdx = candidates[rint(0,candidates.length-1)]; freeBuildings.splice(freeBuildings.indexOf(newIdx),1); const b = world.buildings[newIdx]; const pad=28; let tries=0, cx, cy; do{ cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad); cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad); tries++; } while(tries<30 && world.collideHazard(cx,cy,16)); ch.x=cx; ch.y=cy; ch.r=16; ch.opened=false; ch.buildingIndex=newIdx; b.hasChest=true; } }
+  function respawnCollectedChests(){ const freeBuildings = []; for(let i=0;i<world.buildings.length;i++){ if(!world.buildings[i].hasChest) freeBuildings.push(i); } for(let i=0;i<world.chests.length;i++){ const ch = world.chests[i]; if(!ch.opened) continue; const prevIdx=ch.buildingIndex; world.buildings[prevIdx].hasChest=false; const candidates = freeBuildings.filter(idx=> idx!==prevIdx); if(candidates.length===0) continue; const newIdx = candidates[rint(0,candidates.length-1)]; freeBuildings.splice(freeBuildings.indexOf(newIdx),1); const b = world.buildings[newIdx]; const pad=28; let tries=0, cx, cy; do{ cx=rand(b.inner.x+pad, b.inner.x+b.inner.w-pad); cy=rand(b.inner.y+pad, b.inner.y+b.inner.h-pad); tries++; } while(tries<30 && world.collideHazard(cx,cy,16)); ch.x=cx; ch.y=cy; ch.r=16; ch.opened=false; ch.buildingIndex=newIdx; ch.rarity = rollChestRarity(currentTheme.id); b.hasChest=true; } }
 
   // Waves & progressive difficulty -------------------------------------------
 
@@ -1560,7 +2048,7 @@ if (btnHomeCustomize){
       : '—';
   }
   // Build home cards ----------------------------------------------------------
-  function createLevelPreview(theme){ const cnv=document.createElement('canvas'); cnv.width=260; cnv.height=130; const c=cnv.getContext('2d'); const g=c.createLinearGradient(0,0,0,cnv.height); g.addColorStop(0,theme.floor.c1); g.addColorStop(1,theme.floor.c2); c.fillStyle=g; c.fillRect(0,0,cnv.width,cnv.height); c.strokeStyle=theme.floor.grid; c.lineWidth=1; c.beginPath(); for(let x=0;x<cnv.width;x+=20){ c.moveTo(x,0); c.lineTo(x,cnv.height); } for(let y=0;y<cnv.height;y+=20){ c.moveTo(0,y); c.lineTo(cnv.width,y); } c.stroke(); const rects=[{x:20,y:22,w:70,h:18},{x:120,y:46,w:50,h:26},{x:190,y:26,w:50,h:22},{x:60,y:82,w:120,h:20}]; for(const o of rects){ c.fillStyle=theme.obs.fill; c.strokeStyle=theme.obs.stroke; c.lineWidth=2; roundRect(c,o.x,o.y,o.w,o.h,8); c.fill(); c.stroke(); } if(theme.hazards.kind!=='none'){ c.fillStyle= theme.hazards.kind==='lava'?'#ff6a2a': theme.hazards.kind==='chasm'?'#08101a': theme.hazards.kind==='void'?'#09060c':'#4a3a2a'; c.fillRect(160,22,70,30); c.strokeStyle=theme.accent+'66'; c.strokeRect(160,22,70,30); } c.fillStyle = '#fff'; c.beginPath(); c.arc(200,70, 14, 0, Math.PI*2); c.fill(); return cnv; }
+  function createLevelPreview(theme){ const cnv=document.createElement('canvas'); cnv.width=260; cnv.height=130; const c=cnv.getContext('2d'); const g=c.createLinearGradient(0,0,0,cnv.height); g.addColorStop(0,theme.floor.c1); g.addColorStop(1,theme.floor.c2); c.fillStyle=g; c.fillRect(0,0,cnv.width,cnv.height); c.strokeStyle=theme.floor.grid; c.lineWidth=1; c.beginPath(); for(let x=0;x<cnv.width;x+=20){ c.moveTo(x,0); c.lineTo(x,cnv.height); } for(let y=0;y<cnv.height;y+=20){ c.moveTo(0,y); c.lineTo(cnv.width,y); } c.stroke(); try{ const bgTile=getThemeTile(theme); if(bgTile&&bgTile.width){ c.fillStyle=c.createPattern(bgTile,'repeat'); c.fillRect(0,0,cnv.width,cnv.height); } }catch(e){} const rects=[{x:20,y:22,w:70,h:18},{x:120,y:46,w:50,h:26},{x:190,y:26,w:50,h:22},{x:60,y:82,w:120,h:20}]; for(const o of rects){ c.fillStyle=theme.obs.fill; c.strokeStyle=theme.obs.stroke; c.lineWidth=2; roundRect(c,o.x,o.y,o.w,o.h,8); c.fill(); c.stroke(); } if(theme.hazards.kind!=='none'){ c.fillStyle= theme.hazards.kind==='lava'?'#ff6a2a': theme.hazards.kind==='chasm'?'#08101a': theme.hazards.kind==='void'?'#09060c':'#4a3a2a'; c.fillRect(160,22,70,30); c.strokeStyle=theme.accent+'66'; c.strokeRect(160,22,70,30); } c.fillStyle = '#fff'; c.beginPath(); c.arc(200,70, 14, 0, Math.PI*2); c.fill(); return cnv; }
   function buildHome(){ const grid=document.getElementById('levelsGrid'); grid.innerHTML=''; LEVELS.forEach(theme=>{ const card=document.createElement('div'); card.className='levelCard'; const prev=document.createElement('div'); prev.className='levelPreview'; const prevCanvas=createLevelPreview(theme); prev.appendChild(prevCanvas); const badge=document.createElement('div'); badge.className='levelBadge'; badge.textContent=theme.badge; prev.appendChild(badge); const body=document.createElement('div'); body.className='levelBody'; const name=document.createElement('div'); name.className='levelName'; name.textContent=`${theme.id}. ${theme.name}`; const desc=document.createElement('div'); desc.className='levelDesc'; desc.textContent=theme.desc; body.appendChild(name); body.appendChild(desc); card.appendChild(prev); card.appendChild(body); 
     
     card.addEventListener('click', async () => {
