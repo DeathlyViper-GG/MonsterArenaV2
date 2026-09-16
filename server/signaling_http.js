@@ -2190,6 +2190,8 @@ app.get('/poll', (req, res) => {
   res.on('close', () => clearTimeout(timer));
 });
 
+const SET_LEVEL_GRACE_MS = 15_000; // extra time to allow for slow/VPN connections
+
 app.post('/lobby/setLevel', (req, res) => {
   const { lobbyId, levelId, peerId } = req.body;
   const lobby = LOBBIES.get(lobbyId);
@@ -2197,8 +2199,8 @@ app.post('/lobby/setLevel', (req, res) => {
     return res.status(404).json({ ok:false, error:'Lobby not found' });
   }
 
-  // ✅ Do NOT allow level changes after lobby has started
-  if (Date.now() >= lobby.startTime) {
+  // ✅ Do NOT allow level changes after lobby has started (with grace period for slow connections)
+  if (Date.now() >= lobby.startTime + SET_LEVEL_GRACE_MS) {
     return res.status(409).json({ ok:false, error:'Lobby already started' });
   }
 
