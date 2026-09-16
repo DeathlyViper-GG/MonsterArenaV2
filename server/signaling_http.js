@@ -36,7 +36,7 @@ app.get('/player/guns',   (req, res) => res.status(405).json({ ok:false, error:'
 const TICK_MS = 50; // 100Hz
 const LOBBY_INTERVAL = 10_000;
 const WORLD = { w: 4000, h: 2800 };
-const DISCONNECT_TIMEOUT = 1_000; // 0.1 seconds
+const DISCONNECT_TIMEOUT = 5_000; // 5 seconds - fallback for silent drops only; normal leaves use sendBeacon
 // ============================
 // TEST FLAGS (easy to revert)
 // ============================

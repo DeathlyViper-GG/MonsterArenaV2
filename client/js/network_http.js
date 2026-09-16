@@ -1,6 +1,21 @@
 // network_http.js (HTTP authoritative)
 (() => {
   const BASE = window.location.origin;
+
+  // ✅ Reliably tell the server we left when the tab closes/refreshes/navigates away,
+  // so the server doesn't have to rely on the disconnect timeout for normal exits.
+  window.addEventListener('pagehide', () => {
+    try {
+      const s = window.Net && window.Net.state;
+      if (s && s.lobbyId && s.peerId) {
+        const payload = JSON.stringify({ lobbyId: s.lobbyId, peerId: s.peerId });
+        navigator.sendBeacon(
+          `${BASE}/lobby/leave`,
+          new Blob([payload], { type: 'application/json' })
+        );
+      }
+    } catch {}
+  });
   function getSavedAppearance() {
     try {
       const raw = localStorage.getItem('arenaSettings');
