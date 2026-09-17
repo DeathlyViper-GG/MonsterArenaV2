@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 // --- sanity/version endpoint (proves which code is deployed) ---
 app.get('/__version', (req, res) => {
-  res.json({ ok: true, file: 'signaling_http.js', t: Date.now() });
+  res.json({ ok: true, file: 'signaling_http.js', build: 'grace-fix-v2', t: Date.now() });
 });
 
 // --- make it obvious if client accidentally GETs these ---
