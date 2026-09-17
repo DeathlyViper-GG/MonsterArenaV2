@@ -1343,6 +1343,13 @@
   // Entities ------------------------------------------------------------------
   const ents = { bullets:[], effects:[], pickups:[] };
 
+  // ✅ Remote-entity smoothing (fixes stutter/teleport look from raw poll updates)
+  const remoteVisual = new Map(); // playerId -> { x, y, ang } smoothed render position
+  function lerpAngle(a, b, t) {
+    let diff = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    return a + diff * t;
+  }
+
   // Weapons & player ----------------------------------------------------------
   const weapons = [
   { name:'Pistol',  kind:'pistol',  dmg:18, rof:5,   spread:0.015, speed:1100, ammo:15, reserve:60,  reload:0.9, recoil:0.4, shots:1, pierce:0, dash:380 },
@@ -2466,12 +2473,19 @@ if (btnHomeCustomize){
 
     // ✅ Bullets: server authoritative online, local offline
     const bullets = (online && snap && Array.isArray(snap.bullets)) ? snap.bullets : ents.bullets;
+    // Dead-reckon bullet positions forward using velocity + time since the snapshot
+    // was taken, so they keep moving smoothly between poll updates instead of freezing.
+    const snapAgeSec = (online && snap && typeof snap.t === 'number')
+      ? Math.min(Math.max(0, (Date.now() - snap.t) / 1000), 0.25) // clamp to avoid over-extrapolating on a stalled poll
+      : 0;
     ctx.fillStyle = '#cfe5ff';
     for (const b of bullets){
+      const ex = (online && snapAgeSec > 0) ? b.x + (b.vx || 0) * snapAgeSec : b.x;
+      const ey = (online && snapAgeSec > 0) ? b.y + (b.vy || 0) * snapAgeSec : b.y;
       ctx.beginPath();
       ctx.arc(
-        b.x - cam.x - cam.sx,
-        b.y - cam.y - cam.sy,
+        ex - cam.x - cam.sx,
+        ey - cam.y - cam.sy,
         b.r ?? 4,
         0,
         Math.PI * 2
@@ -2481,19 +2495,38 @@ if (btnHomeCustomize){
 
     // ✅ Remote players (from snapshot)
     if (online && hasFreshSnapshot() && snap && Array.isArray(snap.players)){
+      const seenIds = new Set();
       for (const p of snap.players){
         if (!p || (Net.state?.myId && p.id === Net.state.myId)) continue;
+        seenIds.add(p.id);
 
-        const cx = p.x - cam.x - cam.sx;
-        const cy = p.y - cam.y - cam.sy;
+        // Smooth toward the latest server position instead of snapping to it,
+        // so movement looks continuous between poll updates.
+        let vis = remoteVisual.get(p.id);
+        if (!vis) {
+          vis = { x: p.x, y: p.y, ang: p.ang ?? 0 };
+          remoteVisual.set(p.id, vis);
+        } else {
+          const SMOOTH = 0.25;
+          vis.x += (p.x - vis.x) * SMOOTH;
+          vis.y += (p.y - vis.y) * SMOOTH;
+          vis.ang = lerpAngle(vis.ang, p.ang ?? 0, SMOOTH);
+        }
+
+        const cx = vis.x - cam.x - cam.sx;
+        const cy = vis.y - cam.y - cam.sy;
 
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.rotate(p.ang ?? 0);
+        ctx.rotate(vis.ang);
         drawDesign(selectedDesign, COLORS[selectedColor].c, performance.now()/1000);
         ctx.fillStyle = '#1e2a45';
         ctx.fillRect(player.r * 0.5, -3, 18, 6);
         ctx.restore();
+      }
+      // Drop smoothing state for players who left, so memory doesn't grow forever
+      for (const id of remoteVisual.keys()) {
+        if (!seenIds.has(id)) remoteVisual.delete(id);
       }
     }
 

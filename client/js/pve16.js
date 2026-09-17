@@ -268,7 +268,11 @@
 
     const t = performance.now() - delayMs;
     const span = Math.max(1, _snapCurrT - _snapPrevT);
-    const a = clamp((t - _snapPrevT) / span, 0, 1);
+    const aRaw = (t - _snapPrevT) / span; // NOT clamped yet - we need to know how far past 1 we are
+    const a = clamp(aRaw, 0, 1);
+    // ✅ How far beyond the buffered window we are (ms), when updates arrive slower than delayMs
+    // apart (e.g. VPN/slow connections). Capped so a long stall doesn't send entities flying off.
+    const overrunMs = Math.min(Math.max(0, (aRaw - 1) * span), 250);
 
     const out = { ..._snapCurr };
 
@@ -278,11 +282,19 @@
       out.players = _snapCurr.players.map(pb => {
         const pa = A.get(pb.id);
         if (!pa) return pb;
+        const x = pa.x + (pb.x - pa.x) * a;
+        const y = pa.y + (pb.y - pa.y) * a;
+        if (overrunMs <= 0) {
+          return { ...pb, x, y, ang: lerpAngle(pa.ang ?? 0, pb.ang ?? 0, a) };
+        }
+        // Keep moving using the last known velocity instead of freezing solid
+        const vx = (pb.x - pa.x) / span;
+        const vy = (pb.y - pa.y) / span;
         return {
           ...pb,
-          x: pa.x + (pb.x - pa.x) * a,
-          y: pa.y + (pb.y - pa.y) * a,
-          ang: lerpAngle(pa.ang ?? 0, pb.ang ?? 0, a),
+          x: pb.x + vx * overrunMs,
+          y: pb.y + vy * overrunMs,
+          ang: pb.ang ?? 0,
         };
       });
     }
@@ -293,10 +305,17 @@
       out.enemies = _snapCurr.enemies.map(eb => {
         const ea = A.get(eb.id);
         if (!ea) return eb;
+        const x = ea.x + (eb.x - ea.x) * a;
+        const y = ea.y + (eb.y - ea.y) * a;
+        if (overrunMs <= 0) {
+          return { ...eb, x, y };
+        }
+        const vx = (eb.x - ea.x) / span;
+        const vy = (eb.y - ea.y) / span;
         return {
           ...eb,
-          x: ea.x + (eb.x - ea.x) * a,
-          y: ea.y + (eb.y - ea.y) * a,
+          x: eb.x + vx * overrunMs,
+          y: eb.y + vy * overrunMs,
         };
       });
     }
